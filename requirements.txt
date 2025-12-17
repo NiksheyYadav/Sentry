@@ -1,0 +1,31 @@
+# Mental Health Assessment Framework
+# Core Dependencies
+
+# Computer Vision
+opencv-python>=4.8.0
+mediapipe>=0.10.0
+
+# Deep Learning
+torch>=2.0.0
+torchvision>=0.15.0
+facenet-pytorch>=2.5.3
+
+# Image Processing
+Pillow>=10.0.0
+scikit-image>=0.21.0
+
+# Data Processing
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.11.0
+
+# Visualization
+matplotlib>=3.7.0
+
+# Utilities
+tqdm>=4.65.0
+pyyaml>=6.0
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
