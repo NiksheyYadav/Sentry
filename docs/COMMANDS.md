@@ -1,3 +1,4 @@
+
 # Command Reference
 
 This document provides a comprehensive list of all command-line interface (CLI) commands for the Sentry framework.
@@ -39,6 +40,16 @@ python main.py --demo --trained-model models/emotion_trained/best_model.pth
 **Run a 30-second benchmark on CPU:**
 ```bash
 python main.py --benchmark --duration 30 --cpu
+```
+
+**Use high-performance configuration (recommended for RTX GPUs):**
+```bash
+python main.py --demo --config configs/performance_config.yaml
+```
+
+**Combine custom config with trained model:**
+```bash
+python main.py --demo --config configs/performance_config.yaml --trained-model models/emotion_trained/best_model.pth
 ```
 
 ---

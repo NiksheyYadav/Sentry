@@ -112,8 +112,18 @@ class PoseEstimator:
                 f"And place it in the models directory."
             )
         
-        # Create options for PoseLandmarker
+        # Create base options with GPU delegate if enabled
         base_options = python.BaseOptions(model_asset_path=str(self._model_path))
+        
+        # Try to enable GPU delegate for better performance
+        if self.config.enable_gpu_delegate:
+            try:
+                # Enable GPU delegate
+                base_options.delegate = python.BaseOptions.Delegate.GPU
+                print("  - MediaPipe GPU delegate enabled")
+            except Exception as e:
+                print(f"  - Warning: Could not enable GPU delegate: {e}")
+                print("  - Falling back to CPU")
         
         options = vision.PoseLandmarkerOptions(
             base_options=base_options,

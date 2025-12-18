@@ -12,6 +12,7 @@ class VideoConfig:
     camera_id: int = 0
     capture_fps: int = 30
     process_fps: int = 30  # Process all frames at 30 FPS
+    frame_skip: int = 1  # Process every Nth frame (1 = no skip, 2 = every other frame)
     frame_width: int = 640
     frame_height: int = 480
     buffer_size: int = 300  # 10 seconds at 30 FPS
@@ -37,9 +38,10 @@ class FacialConfig:
 @dataclass
 class PostureConfig:
     """Posture analysis configuration."""
-    min_detection_confidence: float = 0.5
-    min_tracking_confidence: float = 0.5
-    model_complexity: int = 1  # 0=lite, 1=full, 2=heavy
+    min_detection_confidence: float = 0.3  # Reduced for faster detection
+    min_tracking_confidence: float = 0.3  # Reduced for faster tracking
+    model_complexity: int = 0  # 0=lite, 1=full, 2=heavy - using lite for performance
+    enable_gpu_delegate: bool = True  # Enable GPU acceleration for MediaPipe
     # Key landmark indices for feature extraction
     key_landmarks: Dict[str, int] = field(default_factory=lambda: {
         'nose': 0, 'left_shoulder': 11, 'right_shoulder': 12,

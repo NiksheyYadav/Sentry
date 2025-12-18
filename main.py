@@ -109,6 +109,8 @@ class MentalHealthPipeline:
         self.fusion_network.reset_temporal_state()
         self.posture_temporal.reset_hidden()
         
+        frame_skip_counter = 0
+        
         while self._running:
             # Read frame
             frame, timestamp = self.video_capture.read(timeout=1.0)
@@ -120,8 +122,17 @@ class MentalHealthPipeline:
             timestamped = self.frame_buffer.add(frame, timestamp)
             self._frame_count += 1
             
-            # Process frame
-            result = self._process_frame(timestamped.frame, timestamp)
+            # Frame skipping logic for performance
+            frame_skip_counter += 1
+            should_process = (frame_skip_counter >= self.config.video.frame_skip)
+            
+            if should_process:
+                frame_skip_counter = 0
+                # Process frame
+                result = self._process_frame(timestamped.frame, timestamp)
+            else:
+                # Skip processing, use previous results for visualization
+                result = {'info': {'status': 'Frame skipped'}}
             
             # Update visualization
             self.monitor.update(

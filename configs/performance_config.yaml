@@ -1,0 +1,22 @@
+video:
+  camera_id: 0
+  capture_fps: 30
+  process_fps: 30
+  frame_skip: 2  # Process every 2nd frame for better performance
+  frame_width: 640
+  frame_height: 480
+  buffer_size: 300
+
+posture:
+  min_detection_confidence: 0.3
+  min_tracking_confidence: 0.3
+  model_complexity: 0  # Lite model for maximum performance
+  enable_gpu_delegate: true
+
+facial:
+  mtcnn_thresholds: [0.6, 0.7, 0.7]
+  face_padding: 0.2
+  min_face_size: 40
+
+device: cuda
+use_fp16: true  # Mixed precision for faster inference

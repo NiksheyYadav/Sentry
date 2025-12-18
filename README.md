@@ -7,6 +7,7 @@
 ## 📚 Documentation
 
 - **[Getting Started](docs/GETTING_STARTED.md)**: Installation, setup, and running the demo.
+- **[Performance Guide](docs/PERFORMANCE.md)**: Optimization tips for maximum FPS on your hardware.
 - **[Command Reference](docs/COMMANDS.md)**: Full list of CLI commands and arguments.
 - **[Training Guide](docs/TRAINING.md)**: How to train emotion models and custom classifiers.
 - **[Architecture](docs/ARCHITECTURE.md)**: Deep dive into the fusion network, TCN-LSTM models, and heuristic predictors.
@@ -32,9 +33,11 @@
 ## ✨ Key Features
 
 - **Multimodal AI**: Combines MobileNetV3 (Face) and MediaPipe (Pose) with Cross-Attention Fusion.
-- **Real-time Assessment**: 10-30 FPS processing on standard hardware.
+- **Real-time Assessment**: 20-30 FPS processing with GPU acceleration (optimized for RTX GPUs).
+- **GPU Accelerated**: MediaPipe GPU delegate support for faster pose estimation.
 - **Smart Prediction**: Heuristic and Neural predictors for Stress, Depression, and Anxiety.
 - **Privacy First**: 100% local processing; no video leaves your machine.
+- **Performance Modes**: Pre-configured settings for different hardware capabilities.
 
 ## 📁 Project Structure
 
