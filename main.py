@@ -21,6 +21,7 @@ from src.posture.temporal_model import create_temporal_model
 from src.fusion.fusion_network import create_fusion_network
 from src.prediction.classifier import create_classifier
 from src.prediction.calibration import AlertSystem
+from src.prediction.heuristic import HeuristicPredictor
 from src.visualization.monitor import RealtimeMonitor
 
 
@@ -67,6 +68,7 @@ class MentalHealthPipeline:
         self.fusion_network = create_fusion_network(self.config.fusion, device)
         self.classifier = create_classifier(self.config.prediction, self.config.fusion, device)
         self.alert_system = AlertSystem(self.config.prediction)
+        self.heuristic_predictor = HeuristicPredictor()  # Rule-based predictor
         
         # Visualization
         print("  - Visualization...")
@@ -76,6 +78,8 @@ class MentalHealthPipeline:
         self._running = False
         self._frame_count = 0
         self._posture_feature_buffer = []
+        self._last_emotion = 'neutral'
+        self._last_emotion_probs = {}
         
         print("Pipeline initialized successfully!")
     
@@ -157,6 +161,7 @@ class MentalHealthPipeline:
             return result
         
         # Facial analysis
+        # Facial analysis
         facial_embedding = None
         if face is not None:
             emotion = self.emotion_classifier.predict(face.face_image)
@@ -171,15 +176,24 @@ class MentalHealthPipeline:
             )
             
             facial_embedding = emotion.embedding
+            self._last_emotion = emotion.emotion
+            self._last_emotion_probs = emotion.probabilities
             result['info']['emotion'] = emotion.emotion
         
         # Posture analysis
         posture_embedding = None
+        posture_score = 0.5  # Default neutral
+        movement_score = 0.3  # Default slight movement
+        
         if pose is not None:
             # Extract features
             geo_features = self.posture_features.extract_geometric(pose)
             mov_features = self.posture_features.extract_movement(pose)
             feature_vec = self.posture_features.get_feature_vector(pose)
+            
+            # Calculate posture score (higher = worse posture)
+            posture_score = min(1.0, abs(geo_features.spine_curvature) / 30.0)  # Normalize curvature
+            movement_score = min(1.0, mov_features.total_movement * 2.0)  # Normalize movement
             
             # Buffer for temporal model
             self._posture_feature_buffer.append(feature_vec)
@@ -191,25 +205,24 @@ class MentalHealthPipeline:
                 features_array = np.stack(self._posture_feature_buffer[-30:])
                 temporal_result = self.posture_temporal.process_sequence(features_array)
                 posture_embedding = temporal_result.pattern_embedding
-                result['info']['posture'] = geo_features.spine_curvature
+                result['info']['posture'] = f"{geo_features.spine_curvature:.1f}"
         
-        # Fusion and prediction
+        # Use heuristic predictor (emotion-based assessment)
+        prediction = self.heuristic_predictor.predict(
+            emotion=self._last_emotion,
+            emotion_probs=self._last_emotion_probs,
+            posture_score=posture_score,
+            movement_score=movement_score
+        )
+        result['prediction'] = prediction
+        
+        # Check for alerts
+        alert = self.alert_system.evaluate(prediction)
+        result['alert'] = alert
+        
+        # Fusion info (if both modalities available)
         if facial_embedding is not None and posture_embedding is not None:
-            # Fuse features
             fused = self.fusion_network.fuse(facial_embedding, posture_embedding)
-            
-            # Classify
-            prediction = self.classifier.predict(
-                fused.embedding, 
-                use_mc_dropout=True,
-                num_samples=5
-            )
-            result['prediction'] = prediction
-            
-            # Check for alerts
-            alert = self.alert_system.evaluate(prediction)
-            result['alert'] = alert
-            
             result['info']['facial_weight'] = f"{fused.facial_contribution:.2f}"
             result['info']['posture_weight'] = f"{fused.posture_contribution:.2f}"
         
@@ -308,6 +321,10 @@ def main():
         '--camera', type=int, default=0,
         help='Camera device ID'
     )
+    parser.add_argument(
+        '--trained-model', type=str, default=None,
+        help='Path to trained emotion model checkpoint to use instead of pretrained'
+    )
     
     args = parser.parse_args()
     
@@ -321,6 +338,14 @@ def main():
     if args.cpu:
         config.device = "cpu"
     config.video.camera_id = args.camera
+    
+    # Load trained model if specified
+    trained_emotion_model = None
+    if args.trained_model:
+        from src.utils.model_loader import load_trained_emotion_model
+        trained_emotion_model = load_trained_emotion_model(
+            args.trained_model, config.device
+        )
     
     # Run requested mode
     if args.benchmark:

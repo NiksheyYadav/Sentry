@@ -95,6 +95,25 @@ def create_session(args):
     )
 
 
+def evaluate_model(args):
+    """Evaluate trained model and generate visualizations."""
+    from training.evaluation import evaluate_trained_model
+    
+    print(f"Evaluating model: {args.model}")
+    print(f"Data directory: {args.data}")
+    print(f"Output directory: {args.output}")
+    
+    metrics = evaluate_trained_model(
+        model_path=args.model,
+        data_dir=args.data,
+        output_dir=args.output,
+        device='cuda' if not args.cpu else 'cpu'
+    )
+    
+    print(f"\nEvaluation complete!")
+    print(f"Results saved to {args.output}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Mental Health Assessment Framework - Training"
@@ -142,6 +161,17 @@ def main():
     session_parser.add_argument('--duration', type=int, default=60,
                                 help='Expected video duration in seconds')
     session_parser.set_defaults(func=create_session)
+    
+    # Evaluate model
+    eval_parser = subparsers.add_parser('evaluate', help='Evaluate trained model')
+    eval_parser.add_argument('--model', type=str, required=True,
+                            help='Path to model checkpoint')
+    eval_parser.add_argument('--data', type=str, required=True,
+                            help='Path to dataset')
+    eval_parser.add_argument('--output', type=str, default='evaluation_results',
+                            help='Output directory for results')
+    eval_parser.add_argument('--cpu', action='store_true')
+    eval_parser.set_defaults(func=evaluate_model)
     
     args = parser.parse_args()
     

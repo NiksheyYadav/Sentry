@@ -11,10 +11,10 @@ class VideoConfig:
     """Video capture and processing configuration."""
     camera_id: int = 0
     capture_fps: int = 30
-    process_fps: int = 10  # Process every 3rd frame
+    process_fps: int = 30  # Process all frames at 30 FPS
     frame_width: int = 640
     frame_height: int = 480
-    buffer_size: int = 100  # 10 seconds at 10 FPS
+    buffer_size: int = 300  # 10 seconds at 30 FPS
     
 
 @dataclass
