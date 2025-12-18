@@ -19,6 +19,10 @@ Welcome to the Sentry documentation.
   - Fusion network details
   - Heuristic vs Neural prediction
 
+- **[Command Reference](COMMANDS.md)**
+  - Full list of CLI arguments for `main.py`
+  - Training and utility commands for `train.py`
+
 ## API Reference
 
 The source code is organized into the following modules:

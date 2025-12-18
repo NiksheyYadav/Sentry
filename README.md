@@ -1,93 +1,60 @@
-# Mental Health Assessment Framework
+# Sentry: Multimodal Mental Health Assessment Framework
 
-A sophisticated Python-based deep learning framework that performs real-time mental health assessment by analyzing facial expressions and body posture through webcam input.
+**Sentry** is a sophisticated deep learning system that performs real-time mental health assessment by analyzing facial expressions and body posture. It fuses visual cues to detect stress, depression, and anxiety indicators while prioritizing privacy through local processing.
 
-## Features
+![Dashboard](https://via.placeholder.com/800x450?text=Sentry+Dashboard+Preview)
 
-- **Multimodal Analysis**: Combines facial expression and body posture analysis
-- **Real-time Processing**: Achieves 10 FPS on standard hardware
-- **Temporal Modeling**: Tracks patterns over time using TCN-LSTM hybrid architecture
-- **Cross-modal Fusion**: Bidirectional attention between facial and posture features
-- **Calibrated Predictions**: Temperature scaling and Monte Carlo dropout for uncertainty
-- **Alert System**: Severity-based alerts with cooldown to prevent fatigue
-- **Privacy-First**: All processing done locally, no cloud transmission
+## 📚 Documentation
 
-## Installation
+- **[Getting Started](docs/GETTING_STARTED.md)**: Installation, setup, and running the demo.
+- **[Command Reference](docs/COMMANDS.md)**: Full list of CLI commands and arguments.
+- **[Training Guide](docs/TRAINING.md)**: How to train emotion models and custom classifiers.
+- **[Architecture](docs/ARCHITECTURE.md)**: Deep dive into the fusion network, TCN-LSTM models, and heuristic predictors.
 
-```bash
-cd c:\sentry
-pip install -r requirements.txt
-```
+## 🚀 Quick Start
 
-## Quick Start
+1. **Install**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+   *(See [Getting Started](docs/GETTING_STARTED.md) for model setup)*
 
-```bash
-# Run demo with visualization
-python main.py --demo
+2. **Run Demo**:
+   ```bash
+   python main.py --demo
+   ```
 
-# Run performance benchmark
-python main.py --benchmark --duration 60
+3. **Train Emotion Model**:
+   ```bash
+   python train.py emotion --data data/affectnet --epochs 20
+   ```
 
-# Use specific camera
-python main.py --demo --camera 1
+## ✨ Key Features
 
-# Force CPU mode
-python main.py --demo --cpu
-```
+- **Multimodal AI**: Combines MobileNetV3 (Face) and MediaPipe (Pose) with Cross-Attention Fusion.
+- **Real-time Assessment**: 10-30 FPS processing on standard hardware.
+- **Smart Prediction**: Heuristic and Neural predictors for Stress, Depression, and Anxiety.
+- **Privacy First**: 100% local processing; no video leaves your machine.
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 sentry/
-├── src/
-│   ├── config.py                # Configuration dataclasses
-│   ├── video/                   # Video capture and preprocessing
-│   ├── facial/                  # Face detection, emotion, AUs
-│   ├── posture/                 # Pose estimation, features, temporal
-│   ├── fusion/                  # Cross-attention, fusion network
-│   ├── prediction/              # Classifier, calibration, alerts
-│   └── visualization/           # Real-time monitoring dashboard
-├── main.py                      # Entry point
-├── requirements.txt             # Dependencies
-└── README.md
+├── docs/                # Comprehensive documentation
+├── src/                 # Source code
+│   ├── facial/          # Face detection & emotion recognition
+│   ├── posture/         # Pose estimation & temporal analysis
+│   ├── fusion/          # Multimodal fusion network
+│   ├── prediction/      # Heuristic & Neural predictors
+│   ├── visualization/   # Real-time dashboard
+├── models/              # Saved model checkpoints
+├── data/                # Training datasets
+├── main.py              # Application entry point
+└── train.py             # Training CLI
 ```
 
-## Architecture
+## 🛠️ Requirements
 
-1. **Video Capture**: 30 FPS capture, 10 FPS processing (every 3rd frame)
-2. **Facial Analysis**: MTCNN detection → MobileNetV3 emotion → AU detection
-3. **Posture Analysis**: MediaPipe Pose → Geometric/movement features → TCN-LSTM
-4. **Fusion**: Cross-attention mechanism → 1024D fused representation
-5. **Prediction**: Three-headed classifier (stress/depression/anxiety)
-
-## Controls
-
-- `Q`: Quit
-- `R`: Reset temporal state
-
-## Configuration
-
-Create a YAML config file:
-
-```yaml
-video:
-  camera_id: 0
-  process_fps: 10
-  buffer_size: 100
-
-prediction:
-  high_severity_threshold: 0.7
-  alert_cooldown_seconds: 300
-
-device: "cuda"
-```
-
-Load with: `python main.py --demo --config my_config.yaml`
-
-## Ethical Considerations
-
-- All processing is local (no cloud transmission)
-- Clear visual indicator when monitoring is active
-- System serves as screening tool, not diagnostic instrument
-- Alerts are recommendations for human follow-up
-"# Sentry" 
+- Python 3.8+
+- CUDA GPU (Recommended)
+- MediaPipe Task Models (see installation guide)

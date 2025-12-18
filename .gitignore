@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+
+# Data and Models
+data/
+models/
+archive*/
+evaluation_results/
+logs/
+
+# IDE
+.vscode/
+.idea/
+
+# System
+thumbs.db
+Desktop.ini
