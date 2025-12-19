@@ -1,35 +1,178 @@
 # Training Guide
 
-Sentry allows you to fine-tune the emotion recognition models and train custom classifiers.
+Sentry allows you to train models for emotion recognition, posture analysis, and mental health classification.
 
-## 1. Datasets
+## Overview
 
-We support **AffectNet** and **FER2013** datasets.
+| Model Type | Purpose | Dataset | Command |
+|------------|---------|---------|---------|
+| **Emotion** | Facial emotion recognition | AffectNet, FER2013 | `python train.py emotion` |
+| **Posture** | Body language & stress detection | BoLD, MultiPosture | `python train.py posture` |
+| **Classifier** | Mental health heads | Custom features | `python train.py classifier` |
 
-### Downloading AffectNet
+---
 
-1. **Via Kaggle CLI** (Recommended):
-   ```bash
-   kaggle datasets download -d mstjebashazida/affectnet
-   # Extract to data/affectnet
-   ```
+## 1. Emotion Model Training
 
-2. **Manual Download**:
-   - Download from [Kaggle](https://www.kaggle.com/datasets/mstjebashazida/affectnet)
-   - Extract so that `data/affectnet/` contains `train/` and `val/` folders.
+Fine-tune the DenseNet121 backbone for 6-class emotion recognition (neutral, happy, sad, surprise, fear, anger).
 
-## 2. Training the Emotion Model
+### Datasets
 
-Fine-tune the MobileNetV3 backbone on AffectNet:
-
+**AffectNet** (Recommended):
 ```bash
-python train.py emotion --data data/affectnet --epochs 20 --batch-size 32
+# Via Kaggle CLI
+kaggle datasets download -d mstjebashazida/affectnet
+# Extract to data/affectnet/
 ```
 
-- **Output**: Trained models are saved to `models/emotion_trained/`
-- **Metrics**: `best_model.pth` (best validation accuracy) and `final_model.pth`.
+**FER2013**:
+```bash
+kaggle datasets download -d deadskull7/fer2013
+```
 
-## 3. Evaluating Performance
+### Training Command
+
+```bash
+python train.py emotion --data data/affectnet --epochs 40 --batch-size 64
+```
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--data` | Required | Path to dataset directory |
+| `--dataset` | `affectnet` | Dataset type (`affectnet` or `fer2013`) |
+| `--output` | `models/emotion_trained` | Output directory |
+| `--epochs` | `20` | Training epochs |
+| `--batch-size` | `64` | Batch size |
+| `--lr` | `1e-4` | Learning rate |
+| `--workers` | `4` | Data loading workers |
+| `--cpu` | Flag | Force CPU training |
+
+### Anti-Overfitting Features
+
+The emotion trainer includes several regularization techniques:
+- **Label smoothing**: 0.15 (reduces overconfidence)
+- **Weight decay**: 0.05 (L2 regularization)
+- **Dropout**: 0.4-0.5 in classifier heads
+- **Data augmentation**: ColorJitter, RandomErasing, GaussianBlur, Perspective
+- **Early stopping**: Stops after 7 epochs without improvement
+
+---
+
+## 2. Posture Model Training
+
+Train the TCN-LSTM temporal model for body language analysis.
+
+### Multi-Task Learning
+
+The posture model learns three tasks simultaneously:
+
+| Task | Classes | Description |
+|------|---------|-------------|
+| **Posture** | upright, slouched, open, closed | Body language state |
+| **Stress** | calm, fidgeting, restless, stillness | Stress indicators |
+| **Trajectory** | stable, deteriorating, improving | Temporal trends |
+
+### Recommended Datasets
+
+View download instructions:
+```bash
+python train.py download --dataset posture
+```
+
+| Dataset | Best For | Link |
+|---------|----------|------|
+| **BoLD** | Body language categories | https://cydar.ist.psu.edu/emotionchallenge/ |
+| **MultiPosture** | Sitting posture | https://zenodo.org/record/7155660 |
+| **Stress Dataset** | Stress/fidgeting | https://github.com/ggian/stress_dataset |
+| **URMC** | Psychiatric symptoms | arxiv.org/abs/2204.02037 |
+
+### Data Preparation
+
+Structure your data as:
+```
+data/posture/
++-- train/
+|   +-- sequences/
+|   |   +-- seq_001.npy  # Shape: (T, 15)
+|   |   +-- seq_002.npy
+|   +-- labels.json
++-- val/
+    +-- sequences/
+    +-- labels.json
+```
+
+**labels.json format:**
+```json
+{
+    "seq_001": {"posture": 0, "stress": 1, "trajectory": 0},
+    "seq_002": {"posture": 2, "stress": 0, "trajectory": 1}
+}
+```
+
+**Label encoding:**
+- Posture: 0=upright, 1=slouched, 2=open, 3=closed
+- Stress: 0=calm, 1=fidgeting, 2=restless, 3=excessive_stillness
+- Trajectory: 0=stable, 1=deteriorating, 2=improving
+
+### Training Command
+
+```bash
+python train.py posture --data data/posture --epochs 50 --batch-size 32
+```
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--data` | Required | Path to posture dataset |
+| `--output` | `models/posture_trained` | Output directory |
+| `--epochs` | `50` | Training epochs |
+| `--batch-size` | `32` | Batch size |
+| `--lr` | `1e-4` | Learning rate |
+| `--seq-length` | `30` | Sequence length (frames) |
+| `--workers` | `4` | Data loading workers |
+| `--cpu` | Flag | Force CPU training |
+
+### Feature Extraction
+
+To convert videos to feature sequences:
+
+```python
+from src.posture.pose_estimator import PoseEstimator
+from src.posture.features import PostureFeatureExtractor
+import numpy as np
+import cv2
+
+estimator = PoseEstimator()
+extractor = PostureFeatureExtractor()
+
+cap = cv2.VideoCapture("video.mp4")
+features = []
+
+while cap.isOpened():
+    ret, frame = cap.read()
+    if not ret:
+        break
+    
+    pose_result = estimator.process_frame(frame)
+    if pose_result:
+        feature_vector = extractor.get_feature_vector(pose_result)
+        features.append(feature_vector)
+
+np.save("seq_001.npy", np.array(features))
+```
+
+---
+
+## 3. Classifier Head Training
+
+Train custom mental health classifier heads on extracted features.
+
+```bash
+python train.py classifier --features path/to/features --labels path/to/labels.json
+```
+
+---
+
+## 4. Model Evaluation
 
 Generate confusion matrices, training curves, and per-class metrics:
 
@@ -39,22 +182,43 @@ python train.py evaluate --model models/emotion_trained/best_model.pth --data da
 
 Results are saved in `evaluation_results/`.
 
-## 4. Using Trained Models
+---
 
-To use your fine-tuned model in the live application:
+## 5. Using Trained Models
 
+### Emotion Model
 ```bash
 python main.py --demo --trained-model models/emotion_trained/best_model.pth
 ```
 
-## 5. Custom Data Collection
+### Loading in Code
+```python
+from src.facial.emotion import EmotionClassifier
+import torch
 
-You can record your own sessions to train the mental health classifier heads.
+model = EmotionClassifier()
+checkpoint = torch.load("models/emotion_trained/best_model.pth")
+model.load_state_dict(checkpoint['model_state_dict'])
+```
 
-1. **Create Session Template**:
-   ```bash
-   python train.py create-session --output data/sessions/user_01 --duration 60
-   ```
-   
-2. **Record**:
-   The system currently supports training on extracted feature vectors. (Future update: Integration with live recording tool).
+---
+
+## 6. Training Tips
+
+### Reducing Overfitting
+1. Use larger datasets (AffectNet > FER2013)
+2. Enable early stopping (`--epochs 40` with built-in early stopping)
+3. Use data augmentation (enabled by default)
+4. Lower learning rate for fine-tuning
+
+### GPU Optimization
+```bash
+# For RTX GPUs, TF32 is automatically enabled
+python train.py emotion --data data/affectnet --batch-size 64 --workers 4
+```
+
+### Memory Issues
+If you run out of GPU memory:
+```bash
+python train.py emotion --data data/affectnet --batch-size 32
+```

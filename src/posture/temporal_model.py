@@ -145,15 +145,32 @@ class PostureTemporalModel(nn.Module):
         self.projection = nn.Sequential(
             nn.Linear(self.config.lstm_hidden_size, 512),
             nn.ReLU(inplace=True),
-            nn.Dropout(0.2),
+            nn.Dropout(0.4),  # Increased dropout
             nn.Linear(512, 512)
         )
         
-        # Trajectory classifier
+        # Trajectory classifier (stable, deteriorating, improving)
         self.trajectory_classifier = nn.Sequential(
             nn.Linear(512, 64),
             nn.ReLU(inplace=True),
-            nn.Linear(64, 3)  # stable, deteriorating, improving
+            nn.Dropout(0.3),
+            nn.Linear(64, 3)
+        )
+        
+        # Posture classifier (upright, slouched, open, closed)
+        self.posture_classifier = nn.Sequential(
+            nn.Linear(512, 128),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.4),
+            nn.Linear(128, 4)
+        )
+        
+        # Stress indicator classifier (calm, fidgeting, restless, stillness)
+        self.stress_classifier = nn.Sequential(
+            nn.Linear(512, 128),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.4),
+            nn.Linear(128, 4)
         )
         
         self._device = "cpu"

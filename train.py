@@ -76,6 +76,29 @@ def train_classifier(args):
     print(f"\nTraining complete!")
 
 
+def train_posture(args):
+    """Train posture temporal model."""
+    from training.trainers.posture_trainer import train_posture_model
+    
+    print(f"Training posture model")
+    print(f"Data directory: {args.data}")
+    print(f"Output directory: {args.output}")
+    
+    history = train_posture_model(
+        data_dir=args.data,
+        output_dir=args.output,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        learning_rate=args.lr,
+        sequence_length=args.seq_length,
+        device='cuda' if not args.cpu else 'cpu',
+        num_workers=args.workers
+    )
+    
+    print(f"\nTraining complete!")
+    print(f"Best validation accuracy: {max(history.get('val_acc', [0])):.2f}%")
+
+
 def download_info(args):
     """Show download instructions for datasets."""
     if args.dataset == 'affectnet':
@@ -84,8 +107,11 @@ def download_info(args):
     elif args.dataset == 'fer2013':
         from training.datasets.fer2013 import FER2013Dataset
         print(FER2013Dataset.download_instructions())
+    elif args.dataset == 'posture':
+        from training.datasets.posture_dataset import download_instructions
+        download_instructions()
     else:
-        print("Unknown dataset. Available: affectnet, fer2013")
+        print("Unknown dataset. Available: affectnet, fer2013, posture")
 
 
 def create_session(args):
@@ -156,10 +182,26 @@ def main():
     cls_parser.add_argument('--cpu', action='store_true')
     cls_parser.set_defaults(func=train_classifier)
     
+    # Posture training
+    posture_parser = subparsers.add_parser('posture', help='Train posture temporal model')
+    posture_parser.add_argument('--data', type=str, required=True,
+                                help='Path to posture dataset')
+    posture_parser.add_argument('--output', type=str, default='models/posture_trained',
+                                help='Output directory')
+    posture_parser.add_argument('--epochs', type=int, default=50)
+    posture_parser.add_argument('--batch-size', type=int, default=32)
+    posture_parser.add_argument('--lr', type=float, default=1e-4)
+    posture_parser.add_argument('--seq-length', type=int, default=30,
+                                help='Sequence length (frames)')
+    posture_parser.add_argument('--workers', type=int, default=4,
+                                help='Number of data loading workers')
+    posture_parser.add_argument('--cpu', action='store_true')
+    posture_parser.set_defaults(func=train_posture)
+    
     # Download info
     dl_parser = subparsers.add_parser('download', help='Show download instructions')
     dl_parser.add_argument('--dataset', type=str, required=True,
-                           choices=['affectnet', 'fer2013'])
+                           choices=['affectnet', 'fer2013', 'posture'])
     dl_parser.set_defaults(func=download_info)
     
     # Create session template

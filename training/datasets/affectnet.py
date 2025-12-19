@@ -172,7 +172,7 @@ def create_affectnet_loaders(
     root_dir: str,
     batch_size: int = 32,
     num_workers: int = 4,
-    num_classes: int = 7,
+    num_classes: int = 6,
     max_samples_per_class: Optional[int] = None
 ) -> Tuple[DataLoader, DataLoader]:
     from .transforms import get_train_transforms, get_val_transforms
