@@ -14,7 +14,7 @@ MULTIPOSTURE_URL = "https://zenodo.org/records/14230872/files/data.csv?download=
 def download_file(url, output_path):
     """Download a file from URL."""
     print(f"Downloading from {url}...")
-    response = requests.get(url, stream=True)
+    response = requests.get(url, stream=True, headers={'User-Agent': 'Mozilla/5.0'})
     response.raise_for_status()
     
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -38,7 +38,7 @@ def prepare_multiposture_dataset(csv_path, output_dir):
     Convert MultiPosture CSV to Sentry training format.
     
     The dataset has:
-    - 33 input dimensions (11 joints x 3 coordinates)
+    - 100 input dimensions (body keypoints x, y, z)
     - Upper body labels: TUP, TLB, TLF, TLR, TLL
     - Lower body labels: LAP, LWA, LCS, LCR, LCL, LLR, LLL
     """
@@ -46,22 +46,18 @@ def prepare_multiposture_dataset(csv_path, output_dir):
     df = pd.read_csv(csv_path)
     
     print(f"Loaded {len(df)} samples")
-    print(f"Columns: {list(df.columns)}")
+    print(f"Columns: {list(df.columns)[:10]}... (total: {len(df.columns)})")
     
     # Map upper body labels to our posture categories
-    # TUP (upright) -> 0, TLF/TLB (slouched/leaning) -> 1, 
-    # Open posture -> 2, Closed posture -> 3
     upper_body_map = {
         'TUP': 0,  # Upright
         'TLB': 1,  # Leaning backward (slouched)
         'TLF': 1,  # Leaning forward (slouched)
-        'TLR': 1,  # Leaning right (slouched)
-        'TLL': 1,  # Leaning left (slouched)
+        'TLR': 2,  # Leaning right (open/relaxed)
+        'TLL': 2,  # Leaning left (open/relaxed)
     }
     
     # Map lower body labels for stress indicators
-    # Wide/apart legs = open/calm -> 0
-    # Closed/crossed = closed/fidgeting -> 1-3
     lower_body_map = {
         'LAP': 0,  # Legs apart - calm
         'LWA': 0,  # Legs wide apart - calm
@@ -72,22 +68,51 @@ def prepare_multiposture_dataset(csv_path, output_dir):
         'LLL': 1,  # Legs lateral left
     }
     
-    # Find the label columns
+    # Find the label and feature columns
     upper_col = None
     lower_col = None
+    subject_col = None
     feature_cols = []
     
     for col in df.columns:
-        if 'upper' in col.lower() or 'trunk' in col.lower():
+        col_lower = col.lower()
+        if 'upperbody' in col_lower or 'upper_body' in col_lower:
             upper_col = col
-        elif 'lower' in col.lower() or 'leg' in col.lower():
+        elif 'lowerbody' in col_lower or 'lower_body' in col_lower:
             lower_col = col
-        elif col not in ['participant', 'frame', 'label', 'Upper', 'Lower']:
+        elif col_lower in ['subject', 'participant', 'user', 'id']:
+            subject_col = col
+        elif '_x' in col_lower or '_y' in col_lower or '_z' in col_lower:
             feature_cols.append(col)
+    
+    # If no specific feature columns found, use all numeric except labels
+    if not feature_cols:
+        for col in df.columns:
+            if col not in [upper_col, lower_col, subject_col] and df[col].dtype in ['float64', 'int64']:
+                feature_cols.append(col)
     
     print(f"Upper body label column: {upper_col}")
     print(f"Lower body label column: {lower_col}")
+    print(f"Subject column: {subject_col}")
     print(f"Feature columns: {len(feature_cols)}")
+    
+    # Extract all features for normalization
+    all_features = df[feature_cols].values.astype(np.float32)
+    
+    # Compute global mean and std for normalization
+    global_mean = np.mean(all_features, axis=0)
+    global_std = np.std(all_features, axis=0)
+    global_std[global_std < 1e-6] = 1.0  # Avoid division by zero
+    
+    print(f"Feature stats - Mean range: [{global_mean.min():.3f}, {global_mean.max():.3f}]")
+    print(f"Feature stats - Std range: [{global_std.min():.3f}, {global_std.max():.3f}]")
+    
+    # Save normalization stats
+    stats_dir = Path(output_dir)
+    stats_dir.mkdir(parents=True, exist_ok=True)
+    np.save(stats_dir / 'mean.npy', global_mean)
+    np.save(stats_dir / 'std.npy', global_std)
+    print(f"Saved normalization stats to {stats_dir}")
     
     # Create output directories
     train_dir = Path(output_dir) / 'train' / 'sequences'
@@ -95,44 +120,45 @@ def prepare_multiposture_dataset(csv_path, output_dir):
     train_dir.mkdir(parents=True, exist_ok=True)
     val_dir.mkdir(parents=True, exist_ok=True)
     
-    # Group by participant for train/val split
-    if 'participant' in df.columns:
-        participants = df['participant'].unique()
+    # Get unique subjects
+    if subject_col:
+        subjects = df[subject_col].unique()
     else:
-        # Create synthetic participant IDs
-        df['participant'] = (df.index // 300) % 13  # Assume ~300 frames per participant
-        participants = df['participant'].unique()
+        # Create synthetic subject IDs based on index
+        df['_subject'] = (df.index // 300) % 13
+        subject_col = '_subject'
+        subjects = df[subject_col].unique()
     
-    # 80/20 train/val split by participant
+    print(f"Found {len(subjects)} subjects")
+    
+    # 80/20 train/val split by subject
     np.random.seed(42)
-    np.random.shuffle(participants)
-    n_train = int(len(participants) * 0.8)
-    train_participants = set(participants[:n_train])
-    val_participants = set(participants[n_train:])
+    subjects = np.array(subjects)
+    np.random.shuffle(subjects)
+    n_train = max(1, int(len(subjects) * 0.8))
+    train_subjects = set(subjects[:n_train])
+    val_subjects = set(subjects[n_train:])
     
     train_labels = {}
     val_labels = {}
     
-    # Process each participant's data as a sequence
-    for participant in participants:
-        participant_data = df[df['participant'] == participant]
+    # Process each subject's data as a sequence
+    for subject in subjects:
+        subject_data = df[df[subject_col] == subject]
         
-        # Extract features (use all numeric columns if feature_cols is empty)
-        if feature_cols:
-            features = participant_data[feature_cols].values
-        else:
-            numeric_cols = participant_data.select_dtypes(include=[np.number]).columns
-            features = participant_data[numeric_cols].values
+        # Extract and normalize features
+        features = subject_data[feature_cols].values.astype(np.float32)
+        features_normalized = (features - global_mean) / global_std
         
-        # Determine labels
-        if upper_col and upper_col in participant_data.columns:
-            upper_label = participant_data[upper_col].mode().iloc[0]
+        # Determine labels from mode (most common value)
+        if upper_col:
+            upper_label = subject_data[upper_col].mode().iloc[0] if len(subject_data[upper_col].mode()) > 0 else 'TUP'
             posture = upper_body_map.get(str(upper_label), 0)
         else:
             posture = 0
         
-        if lower_col and lower_col in participant_data.columns:
-            lower_label = participant_data[lower_col].mode().iloc[0]
+        if lower_col:
+            lower_label = subject_data[lower_col].mode().iloc[0] if len(subject_data[lower_col].mode()) > 0 else 'LAP'
             stress = lower_body_map.get(str(lower_label), 0)
         else:
             stress = 0
@@ -140,26 +166,30 @@ def prepare_multiposture_dataset(csv_path, output_dir):
         # Trajectory is 0 (stable) for static dataset
         trajectory = 0
         
-        seq_name = f"participant_{participant:02d}"
+        # Handle different subject ID types
+        if isinstance(subject, (int, np.integer)):
+            seq_name = f"subject_{int(subject):03d}"
+        else:
+            seq_name = f"subject_{str(subject).replace(' ', '_')}"
         
-        if participant in train_participants:
+        if subject in train_subjects:
             seq_path = train_dir / f"{seq_name}.npy"
-            np.save(seq_path, features.astype(np.float32))
+            np.save(seq_path, features_normalized)
             train_labels[seq_name] = {
                 'posture': int(posture),
                 'stress': int(stress),
-                'trajectory': trajectory
+                'trajectory': int(trajectory)
             }
-            print(f"Saved train sequence: {seq_name} ({len(features)} frames)")
+            print(f"Train: {seq_name} ({len(features)} frames) - posture={posture}, stress={stress}")
         else:
             seq_path = val_dir / f"{seq_name}.npy"
-            np.save(seq_path, features.astype(np.float32))
+            np.save(seq_path, features_normalized)
             val_labels[seq_name] = {
                 'posture': int(posture),
                 'stress': int(stress),
-                'trajectory': trajectory
+                'trajectory': int(trajectory)
             }
-            print(f"Saved val sequence: {seq_name} ({len(features)} frames)")
+            print(f"Val: {seq_name} ({len(features)} frames) - posture={posture}, stress={stress}")
     
     # Save labels
     with open(Path(output_dir) / 'train' / 'labels.json', 'w') as f:
@@ -171,6 +201,16 @@ def prepare_multiposture_dataset(csv_path, output_dir):
     print(f"\nDataset prepared!")
     print(f"Train: {len(train_labels)} sequences")
     print(f"Val: {len(val_labels)} sequences")
+    
+    # Print label distribution
+    print("\nLabel distribution:")
+    posture_dist = {}
+    stress_dist = {}
+    for labels in list(train_labels.values()) + list(val_labels.values()):
+        posture_dist[labels['posture']] = posture_dist.get(labels['posture'], 0) + 1
+        stress_dist[labels['stress']] = stress_dist.get(labels['stress'], 0) + 1
+    print(f"  Posture: {posture_dist}")
+    print(f"  Stress: {stress_dist}")
 
 
 def main():
@@ -186,7 +226,17 @@ def main():
     else:
         print(f"Dataset already exists at {csv_path}")
     
-    # Prepare for training
+    # Clear old processed data
+    train_seq_dir = data_dir / 'train' / 'sequences'
+    val_seq_dir = data_dir / 'val' / 'sequences'
+    if train_seq_dir.exists():
+        for f in train_seq_dir.glob('*.npy'):
+            f.unlink()
+    if val_seq_dir.exists():
+        for f in val_seq_dir.glob('*.npy'):
+            f.unlink()
+    
+    # Prepare for training with normalization
     prepare_multiposture_dataset(csv_path, data_dir)
     
     print("\n" + "="*50)

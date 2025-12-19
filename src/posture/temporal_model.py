@@ -141,12 +141,14 @@ class PostureTemporalModel(nn.Module):
             bidirectional=False
         )
         
-        # Projection to output embedding
+        # Projection to output embedding with LayerNorm for stability
         self.projection = nn.Sequential(
             nn.Linear(self.config.lstm_hidden_size, 512),
+            nn.LayerNorm(512),
             nn.ReLU(inplace=True),
-            nn.Dropout(0.4),  # Increased dropout
-            nn.Linear(512, 512)
+            nn.Dropout(0.4),
+            nn.Linear(512, 512),
+            nn.LayerNorm(512)
         )
         
         # Trajectory classifier (stable, deteriorating, improving)
@@ -173,8 +175,23 @@ class PostureTemporalModel(nn.Module):
             nn.Linear(128, 4)
         )
         
+        # Initialize weights properly
+        self._init_weights()
+        
         self._device = "cpu"
         self._hidden = None
+    
+    def _init_weights(self):
+        """Initialize weights with small values to prevent exploding gradients."""
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight, gain=0.1)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+            elif isinstance(m, nn.Conv1d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
     
     def to(self, device):
         """Move model to device."""

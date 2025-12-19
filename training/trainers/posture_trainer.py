@@ -61,30 +61,11 @@ class PostureTrainer:
         self.stress_weight = stress_weight
         self.trajectory_weight = trajectory_weight
         
-        # Loss functions with class weights
-        if class_weights and 'posture' in class_weights:
-            self.posture_criterion = nn.CrossEntropyLoss(
-                weight=class_weights['posture'].to(device),
-                label_smoothing=0.1
-            )
-        else:
-            self.posture_criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
-        
-        if class_weights and 'stress' in class_weights:
-            self.stress_criterion = nn.CrossEntropyLoss(
-                weight=class_weights['stress'].to(device),
-                label_smoothing=0.1
-            )
-        else:
-            self.stress_criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
-        
-        if class_weights and 'trajectory' in class_weights:
-            self.trajectory_criterion = nn.CrossEntropyLoss(
-                weight=class_weights['trajectory'].to(device),
-                label_smoothing=0.1
-            )
-        else:
-            self.trajectory_criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+        # Loss functions - don't use class weights if they cause numerical issues
+        # (e.g., when all samples have the same label)
+        self.posture_criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+        self.stress_criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+        self.trajectory_criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
         
         # Optimizer with weight decay for regularization
         self.optimizer = optim.AdamW(
@@ -404,12 +385,19 @@ def train_posture_model(
         sequence_length=sequence_length
     )
     
-    # Create model
-    config = PostureConfig()
-    model = PostureTemporalModel(config)
+    # Auto-detect input dimension from data
+    sample_seq, _ = train_loader.dataset[0]
+    input_dim = sample_seq.shape[-1]  # Last dimension is feature count
+    print(f"Detected input dimension: {input_dim}")
     
-    # Add classification heads
-    model = add_classification_heads(model)
+    # Create model with correct input dimension
+    config = PostureConfig()
+    config.input_dim = input_dim
+    model = PostureTemporalModel(config)
+    print(f"Model input_dim: {model.input_dim}")
+    
+    # Classification heads are already in the model
+    # (added in temporal_model.py)
     
     # Get class weights
     class_weights = {}
