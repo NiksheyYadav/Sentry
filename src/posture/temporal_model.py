@@ -349,27 +349,36 @@ def create_temporal_model(config: Optional[PostureConfig] = None,
     
     if checkpoint_path and os.path.exists(checkpoint_path):
         # Load checkpoint and extract input dimension
-        checkpoint = torch.load(checkpoint_path, map_location=device)
-        state_dict = checkpoint.get('model_state_dict', checkpoint)
-        
-        # Extract input_dim from first conv layer
-        input_dim = 15  # default
-        for key in state_dict:
-            if 'tcn.network.0.conv1.weight' in key:
-                input_dim = state_dict[key].shape[1]
-                break
-        
-        print(f"Loading trained posture model (input_dim={input_dim})")
-        
-        # Create config with correct input_dim
-        if config is None:
-            config = PostureConfig()
-        config.input_dim = input_dim
-        
-        model = PostureTemporalModel(config=config)
-        model.load_state_dict(state_dict)
-        model.to(device)
-        print(f"Loaded trained posture model from {checkpoint_path}")
+        try:
+            checkpoint = torch.load(checkpoint_path, map_location=device)
+            state_dict = checkpoint.get('model_state_dict', checkpoint)
+            
+            # Extract input_dim from first conv layer
+            checkpoint_input_dim = 15  # default
+            for key in state_dict:
+                if 'tcn.network.0.conv1.weight' in key:
+                    checkpoint_input_dim = state_dict[key].shape[1]
+                    break
+            
+            # Validate against config
+            requested_input_dim = config.input_dim if config else 15
+            
+            if checkpoint_input_dim != requested_input_dim:
+                print(f"Warning: Model checkpoint has {checkpoint_input_dim} features, but {requested_input_dim} were requested.")
+                print(f"Skipping incompatible model loading. Using untrained model instead.")
+                model = PostureTemporalModel(config=config)
+                model.to(device)
+            else:
+                print(f"Loading trained posture model (input_dim={checkpoint_input_dim})")
+                model = PostureTemporalModel(config=config)
+                model.load_state_dict(state_dict)
+                model.to(device)
+                print(f"Loaded trained posture model from {checkpoint_path}")
+                
+        except Exception as e:
+            print(f"Error loading posture checkpoint: {e}")
+            model = PostureTemporalModel(config=config)
+            model.to(device)
     else:
         # Use untrained model
         model = PostureTemporalModel(config=config)

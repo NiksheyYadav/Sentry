@@ -1,0 +1,10 @@
+{
+  "overall_accuracy": 0.8950839555774551,
+  "posture_accuracy": 0.7726187317590872,
+  "stress_accuracy": 0.9126331349732782,
+  "trajectory_accuracy": 1.0,
+  "posture_f1": 0.7707127544705915,
+  "stress_f1": 0.9091044245120142,
+  "trajectory_f1": 1.0,
+  "num_samples": 26383
+}
