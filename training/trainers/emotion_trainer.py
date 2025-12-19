@@ -86,8 +86,13 @@ class EmotionTrainer:
         # Unfreeze last few layers for fine-tuning
         if hasattr(self.model, 'backbone'):
             # Unfreeze last 2 blocks of MobileNetV3
+            # for name, param in self.model.backbone.named_parameters():
+            #     if 'features.16' in name or 'features.15' in name:
+            #         param.requires_grad = True
+            
+            # Unfreeze last block of DenseNet121
             for name, param in self.model.backbone.named_parameters():
-                if 'features.16' in name or 'features.15' in name:
+                if 'features.denseblock4' in name or 'features.norm5' in name:
                     param.requires_grad = True
         
         # Count trainable parameters
@@ -102,29 +107,38 @@ class EmotionTrainer:
         correct = 0
         total = 0
         
+        # Initialize GradScaler for AMP
+        self.scaler = torch.cuda.amp.GradScaler(enabled=(self.device == 'cuda'))
+
         pbar = tqdm(self.train_loader, desc=f"Epoch {self.current_epoch + 1}")
         for batch_idx, (images, labels) in enumerate(pbar):
             images = images.to(self.device)
             labels = labels.to(self.device)
             
-            # Forward pass
             self.optimizer.zero_grad()
-            outputs = self.model(images)
             
-            # Handle different output formats
-            if isinstance(outputs, dict):
-                logits = outputs.get('logits', outputs.get('emotion', None))
-            elif isinstance(outputs, tuple):
-                logits = outputs[0]
-            else:
-                logits = outputs
+            # Forward pass with AMP
+            with torch.cuda.amp.autocast(enabled=(self.device == 'cuda')):
+                outputs = self.model(images)
+                
+                # Handle different output formats
+                if isinstance(outputs, dict):
+                    logits = outputs.get('logits', outputs.get('emotion', None))
+                elif isinstance(outputs, tuple):
+                    logits = outputs[0]
+                else:
+                    logits = outputs
+                
+                loss = self.criterion(logits, labels)
             
-            loss = self.criterion(logits, labels)
+            # Backward pass with AMP
+            self.scaler.scale(loss).backward()
             
-            # Backward pass
-            loss.backward()
+            self.scaler.unscale_(self.optimizer)
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-            self.optimizer.step()
+            
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
             
             # Statistics
             total_loss += loss.item()
@@ -232,6 +246,11 @@ class EmotionTrainer:
             else:
                 no_improvement += 1
             
+            # Save periodic checkpoint
+            if save_dir and (epoch + 1) % 5 == 0:
+                self.save_checkpoint(save_path / f'checkpoint_epoch_{epoch+1}.pth')
+                print(f"  -> Periodic checkpoint saved at epoch {epoch+1}")
+            
             # Early stopping
             if no_improvement >= early_stopping:
                 print(f"Early stopping after {early_stopping} epochs without improvement")
@@ -271,8 +290,9 @@ def train_emotion_model(
     dataset: str = 'affectnet',
     epochs: int = 20,
     batch_size: int = 32,
-    learning_rate: float = 1e-4,
-    device: str = 'cuda'
+    learning_rate: float = 3e-4,
+    device: str = 'cuda',
+    num_workers: int = 4
 ) -> Dict:
     """
     Main training function.
@@ -296,12 +316,16 @@ def train_emotion_model(
     # Create data loaders
     if dataset == 'affectnet':
         train_loader, val_loader = create_affectnet_loaders(
-            data_dir, batch_size=batch_size
+            data_dir, 
+            batch_size=batch_size,
+            num_workers=num_workers
         )
         num_classes = 7
     else:
         train_loader, val_loader = create_fer2013_loaders(
-            data_dir, batch_size=batch_size
+            data_dir, 
+            batch_size=batch_size,
+            num_workers=num_workers
         )
         num_classes = 7
     
@@ -363,7 +387,9 @@ if __name__ == '__main__':
         dataset=args.dataset,
         epochs=args.epochs,
         batch_size=args.batch_size,
-        learning_rate=args.lr
+
+        learning_rate=args.lr,
+        num_workers=4
     )
     
     print(f"\nTraining complete! Best validation accuracy: {max(history['val_acc']):.2f}%")

@@ -5,7 +5,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import transforms
-from torchvision.models import mobilenet_v3_large, MobileNet_V3_Large_Weights
+# from torchvision.models import mobilenet_v3_large, MobileNet_V3_Large_Weights
+from torchvision.models import densenet121, DenseNet121_Weights
 import numpy as np
 from typing import Optional, Tuple, Dict, List
 from dataclasses import dataclass
@@ -43,14 +44,22 @@ class EmotionClassifier(nn.Module):
         self.num_classes = len(self.config.emotion_classes)
         
         # Load pretrained MobileNetV3
+        # if pretrained:
+        #     weights = MobileNet_V3_Large_Weights.IMAGENET1K_V2
+        #     self.backbone = mobilenet_v3_large(weights=weights)
+        # else:
+        #     self.backbone = mobilenet_v3_large(weights=None)
+        
+        # Load pretrained DenseNet121
         if pretrained:
-            weights = MobileNet_V3_Large_Weights.IMAGENET1K_V2
-            self.backbone = mobilenet_v3_large(weights=weights)
+            weights = DenseNet121_Weights.IMAGENET1K_V1
+            self.backbone = densenet121(weights=weights)
         else:
-            self.backbone = mobilenet_v3_large(weights=None)
+            self.backbone = densenet121(weights=None)
         
         # Get embedding dimension from backbone
-        self.embedding_dim = self.backbone.classifier[0].in_features  # 960
+        # self.embedding_dim = self.backbone.classifier[0].in_features  # 960 (MobileNetV3)
+        self.embedding_dim = self.backbone.classifier.in_features  # 1024 (DenseNet121)
         
         # Replace classifier with emotion head
         self.backbone.classifier = nn.Identity()

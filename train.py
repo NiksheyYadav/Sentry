@@ -4,6 +4,7 @@
 import argparse
 import sys
 from pathlib import Path
+import torch
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -24,7 +25,9 @@ def train_emotion(args):
         epochs=args.epochs,
         batch_size=args.batch_size,
         learning_rate=args.lr,
-        device='cuda' if not args.cpu else 'cpu'
+
+        device='cuda',
+        num_workers=args.workers
     )
     
     print(f"\nTraining complete!")
@@ -128,9 +131,15 @@ def main():
                                 help='Output directory')
     emotion_parser.add_argument('--dataset', type=str, default='affectnet',
                                 choices=['affectnet', 'fer2013'])
+    # Optimize for RTX GPU
+    if torch.cuda.is_available():
+        torch.backends.cudnn.benchmark = True
+        torch.backends.cuda.matmul.allow_tf32 = True  # Allow TF32 on Ampere/Hopper/Blackwell
+    
     emotion_parser.add_argument('--epochs', type=int, default=20)
-    emotion_parser.add_argument('--batch-size', type=int, default=32)
-    emotion_parser.add_argument('--lr', type=float, default=1e-4)
+    emotion_parser.add_argument('--batch-size', type=int, default=64)
+    emotion_parser.add_argument('--lr', type=float, default=3e-4)
+    emotion_parser.add_argument('--workers', type=int, default=4, help='Number of data loading workers')
     emotion_parser.add_argument('--cpu', action='store_true')
     emotion_parser.set_defaults(func=train_emotion)
     
