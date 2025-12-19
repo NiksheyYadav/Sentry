@@ -384,29 +384,42 @@ def evaluate_posture_model(
     
     device = device if torch.cuda.is_available() else 'cpu'
     
-    # Load data first to get input dimension
-    _, val_loader = create_posture_loaders(data_dir, batch_size=32)
+    # Load checkpoint first to get the model's input dimension
+    print(f"Loading model from {model_path}")
+    checkpoint = torch.load(model_path, map_location=device)
+    state_dict = checkpoint['model_state_dict']
     
-    # Get feature dimension from dataset
-    if hasattr(val_loader.dataset, 'feature_dim'):
-        input_dim = val_loader.dataset.feature_dim
+    # Extract input dimension from the first conv layer weights
+    # tcn.network.0.conv1.weight has shape [out_channels, in_channels, kernel_size]
+    for key in state_dict:
+        if 'tcn.network.0.conv1.weight' in key:
+            input_dim = state_dict[key].shape[1]
+            break
     else:
-        sample, _ = val_loader.dataset[0]
-        input_dim = sample.shape[-1]
+        input_dim = 99  # fallback
     
-    print(f"Input dimension: {input_dim}")
+    print(f"Model input dimension: {input_dim}")
     
-    # Create model with correct input dimension
+    # Create model with correct input dimension from checkpoint
     config = PostureConfig()
     config.input_dim = input_dim
     model = PostureTemporalModel(config)
     
-    # Load checkpoint
-    print(f"Loading model from {model_path}")
-    checkpoint = torch.load(model_path, map_location=device)
-    model.load_state_dict(checkpoint['model_state_dict'])
+    # Load weights
+    model.load_state_dict(state_dict)
     model = model.to(device)
     model.eval()
+    
+    # Load data - need to ensure same feature dimension
+    _, val_loader = create_posture_loaders(data_dir, batch_size=32)
+    
+    # Check data feature dimension
+    data_dim = val_loader.dataset.feature_dim if hasattr(val_loader.dataset, 'feature_dim') else 99
+    print(f"Data feature dimension: {data_dim}")
+    
+    if data_dim != input_dim:
+        print(f"WARNING: Data dimension ({data_dim}) != Model dimension ({input_dim})")
+        print(f"Will {'truncate' if data_dim > input_dim else 'pad'} features during evaluation")
     
     # Evaluate
     posture_preds, posture_labels = [], []
@@ -416,6 +429,16 @@ def evaluate_posture_model(
     print("Evaluating posture model...")
     with torch.no_grad():
         for sequences, labels in tqdm(val_loader):
+            # Handle feature dimension mismatch
+            if sequences.shape[-1] > input_dim:
+                # Truncate to model's expected dimension
+                sequences = sequences[:, :, :input_dim]
+            elif sequences.shape[-1] < input_dim:
+                # Pad with zeros
+                padding = torch.zeros(sequences.shape[0], sequences.shape[1], 
+                                     input_dim - sequences.shape[-1])
+                sequences = torch.cat([sequences, padding], dim=-1)
+            
             sequences = sequences.to(device)
             
             embedding, trajectory_logits, _ = model(sequences)
