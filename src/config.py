@@ -41,7 +41,7 @@ class PostureConfig:
     min_detection_confidence: float = 0.3  # Reduced for faster detection
     min_tracking_confidence: float = 0.3  # Reduced for faster tracking
     model_complexity: int = 0  # 0=lite, 1=full, 2=heavy - using lite for performance
-    enable_gpu_delegate: bool = True  # Enable GPU acceleration for MediaPipe
+    enable_gpu_delegate: bool = False  # Disabled - not supported on Windows
     # Key landmark indices for feature extraction
     key_landmarks: Dict[str, int] = field(default_factory=lambda: {
         'nose': 0, 'left_shoulder': 11, 'right_shoulder': 12,

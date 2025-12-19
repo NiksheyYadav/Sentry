@@ -255,6 +255,16 @@ class PostureTemporalModel(nn.Module):
         """
         self.eval()
         
+        # Handle dimension mismatch: pad features if needed
+        seq_features = feature_sequence.shape[1] if len(feature_sequence.shape) > 1 else feature_sequence.shape[0]
+        if seq_features < self.input_dim:
+            # Pad with zeros to match expected input dimension
+            padding = np.zeros((feature_sequence.shape[0], self.input_dim - seq_features))
+            feature_sequence = np.concatenate([feature_sequence, padding], axis=1)
+        elif seq_features > self.input_dim:
+            # Truncate to expected dimension
+            feature_sequence = feature_sequence[:, :self.input_dim]
+        
         # Prepare input
         x = torch.from_numpy(feature_sequence).float()
         x = x.unsqueeze(0).to(self._device)  # Add batch dim
