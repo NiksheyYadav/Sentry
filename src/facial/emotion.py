@@ -86,15 +86,15 @@ class EmotionClassifier(nn.Module):
         self.projection = nn.Sequential(
             nn.Linear(self.embedding_dim, self.config.embedding_dim),
             nn.ReLU(inplace=True),
-            nn.Dropout(0.2)
+            nn.Dropout(0.4)  # Increased dropout for regularization
         )
         
-        # Classification head
+        # Classification head with stronger regularization
         self.classifier = nn.Sequential(
-            nn.Linear(self.config.embedding_dim, 512),
+            nn.Linear(self.config.embedding_dim, 256),  # Reduced size
             nn.ReLU(inplace=True),
-            nn.Dropout(0.3),
-            nn.Linear(512, self.num_classes)
+            nn.Dropout(0.5),  # Increased dropout
+            nn.Linear(256, self.num_classes)
         )
         
         # Preprocessing (Grayscale)

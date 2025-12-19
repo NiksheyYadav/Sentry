@@ -53,14 +53,14 @@ class EmotionTrainer:
         if freeze_backbone:
             self._freeze_backbone()
         
-        # Loss function
+        # Loss function with higher label smoothing to reduce overconfidence
         if class_weights is not None:
             class_weights = class_weights.to(device)
-        self.criterion = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=0.1)
+        self.criterion = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=0.15)  # Increased from 0.1
         
-        # Optimizer - only for trainable parameters
+        # Optimizer - stronger weight decay for regularization
         trainable_params = filter(lambda p: p.requires_grad, self.model.parameters())
-        self.optimizer = optim.AdamW(trainable_params, lr=learning_rate, weight_decay=0.01)
+        self.optimizer = optim.AdamW(trainable_params, lr=learning_rate, weight_decay=0.05)  # Increased from 0.01
         
         # Learning rate scheduler
         self.scheduler = optim.lr_scheduler.CosineAnnealingLR(
@@ -358,11 +358,11 @@ def train_emotion_model(
         class_weights=class_weights
     )
     
-    # Train
+    # Train with early stopping to prevent overfitting
     history = trainer.train(
         epochs=epochs,
         save_dir=output_dir,
-        early_stopping=None
+        early_stopping=7  # Stop if no improvement for 7 epochs
     )
     
     return history

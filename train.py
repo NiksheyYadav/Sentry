@@ -138,7 +138,7 @@ def main():
     
     emotion_parser.add_argument('--epochs', type=int, default=20)
     emotion_parser.add_argument('--batch-size', type=int, default=64)
-    emotion_parser.add_argument('--lr', type=float, default=3e-4)
+    emotion_parser.add_argument('--lr', type=float, default=1e-4)  # Lower LR for better generalization
     emotion_parser.add_argument('--workers', type=int, default=4, help='Number of data loading workers')
     emotion_parser.add_argument('--cpu', action='store_true')
     emotion_parser.set_defaults(func=train_emotion)
