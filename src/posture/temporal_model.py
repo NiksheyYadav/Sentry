@@ -322,18 +322,59 @@ class PostureTemporalModel(nn.Module):
 
 
 def create_temporal_model(config: Optional[PostureConfig] = None,
-                          device: str = "cuda") -> PostureTemporalModel:
+                          device: str = "cuda",
+                          checkpoint_path: Optional[str] = None) -> PostureTemporalModel:
     """
     Factory function to create temporal posture model.
     
     Args:
         config: Posture analysis configuration.
         device: Computation device.
+        checkpoint_path: Optional path to trained model checkpoint.
         
     Returns:
         Initialized PostureTemporalModel on specified device.
     """
+    import os
+    
     device = device if torch.cuda.is_available() else "cpu"
-    model = PostureTemporalModel(config=config)
-    model.to(device)
+    
+    # Check for trained model
+    if checkpoint_path is None:
+        # Try default location
+        default_path = "models/posture_trained/best_model.pth"
+        if os.path.exists(default_path):
+            checkpoint_path = default_path
+            print(f"Found trained posture model: {checkpoint_path}")
+    
+    if checkpoint_path and os.path.exists(checkpoint_path):
+        # Load checkpoint and extract input dimension
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        state_dict = checkpoint.get('model_state_dict', checkpoint)
+        
+        # Extract input_dim from first conv layer
+        input_dim = 15  # default
+        for key in state_dict:
+            if 'tcn.network.0.conv1.weight' in key:
+                input_dim = state_dict[key].shape[1]
+                break
+        
+        print(f"Loading trained posture model (input_dim={input_dim})")
+        
+        # Create config with correct input_dim
+        if config is None:
+            config = PostureConfig()
+        config.input_dim = input_dim
+        
+        model = PostureTemporalModel(config=config)
+        model.load_state_dict(state_dict)
+        model.to(device)
+        print(f"Loaded trained posture model from {checkpoint_path}")
+    else:
+        # Use untrained model
+        model = PostureTemporalModel(config=config)
+        model.to(device)
+        if checkpoint_path:
+            print(f"Warning: Checkpoint not found: {checkpoint_path}")
+    
     return model
