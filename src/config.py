@@ -12,7 +12,7 @@ class VideoConfig:
     camera_id: int = 0
     capture_fps: int = 30
     process_fps: int = 30  # Process all frames at 30 FPS
-    frame_skip: int = 1  # Process every Nth frame (1 = no skip, 2 = every other frame)
+    frame_skip: int = 2  # Process every Nth frame (1 = no skip, 2 = every other frame)
     frame_width: int = 640
     frame_height: int = 480
     buffer_size: int = 300  # 10 seconds at 30 FPS
@@ -48,7 +48,7 @@ class PostureConfig:
         'left_hip': 23, 'right_hip': 24, 'left_ear': 7, 'right_ear': 8
     })
     # Temporal model settings
-    input_dim: int = 99  # 99 features from MultiPosture, 15 for live extractor
+    input_dim: int = 15  # 15 for live feature extractor, 75 for NTU, 99 for MultiPosture
     tcn_channels: List[int] = field(default_factory=lambda: [64, 128, 256])
     tcn_kernel_size: int = 3
     lstm_hidden_size: int = 128

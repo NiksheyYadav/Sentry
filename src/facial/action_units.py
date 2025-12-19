@@ -131,12 +131,16 @@ class ActionUnitDetector(nn.Module):
         img = np.transpose(img, (2, 0, 1))
         input_tensor = torch.from_numpy(img).unsqueeze(0).to(self._device)
         
-        with torch.no_grad():
-            au_intensities = self.forward(input_tensor)
-            patterns = self.pattern_detector(au_intensities / 5.0)  # Normalize for pattern detection
+        # Use FP16 if on CUDA
+        use_amp = (self._device == "cuda" or (isinstance(self._device, torch.device) and self._device.type == "cuda"))
         
-        au_np = au_intensities.cpu().numpy()[0]
-        patterns_np = patterns.cpu().numpy()[0]
+        with torch.no_grad():
+            with torch.cuda.amp.autocast(enabled=use_amp):
+                au_intensities = self.forward(input_tensor)
+                patterns = self.pattern_detector(au_intensities / 5.0)  # Normalize for pattern detection
+        
+        au_np = au_intensities.cpu().float().numpy()[0]
+        patterns_np = patterns.cpu().float().numpy()[0]
         
         # Build result
         intensity_dict = {

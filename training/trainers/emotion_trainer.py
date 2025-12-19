@@ -318,7 +318,8 @@ def train_emotion_model(
         train_loader, val_loader = create_affectnet_loaders(
             data_dir, 
             batch_size=batch_size,
-            num_workers=num_workers
+            num_workers=num_workers,
+            num_classes=6
         )
         num_classes = 6
     else:

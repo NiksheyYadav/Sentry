@@ -33,12 +33,14 @@ class MentalHealthPipeline:
     fusion, and prediction in real-time.
     """
     
-    def __init__(self, config: Optional[Config] = None):
+    def __init__(self, config: Optional[Config] = None, 
+                 emotion_classifier: Optional['EmotionClassifier'] = None):
         """
         Initialize pipeline.
         
         Args:
             config: Framework configuration.
+            emotion_classifier: Pre-loaded/trained emotion classifier.
         """
         self.config = config or default_config
         device = self.config.device
@@ -53,7 +55,12 @@ class MentalHealthPipeline:
         # Facial analysis
         print("  - Facial analysis modules...")
         self.face_detector = FaceDetector(self.config.facial, device)
-        self.emotion_classifier = create_emotion_classifier(self.config.facial, device)
+        if emotion_classifier:
+            print("  - Using provided trained emotion model")
+            self.emotion_classifier = emotion_classifier
+        else:
+            print("  - Creating new (untrained) emotion model")
+            self.emotion_classifier = create_emotion_classifier(self.config.facial, device)
         self.au_detector = create_au_detector(self.config.facial, device)
         self.facial_temporal = FacialTemporalAggregator(self.config.facial)
         
@@ -97,6 +104,7 @@ class MentalHealthPipeline:
         """Stop the pipeline."""
         self._running = False
         self.video_capture.stop()
+        self.face_detector.close()
         self.pose_estimator.close()
         self.monitor.stop()
     
@@ -110,6 +118,7 @@ class MentalHealthPipeline:
         self.posture_temporal.reset_hidden()
         
         frame_skip_counter = 0
+        last_result = {}
         
         while self._running:
             # Read frame
@@ -130,9 +139,12 @@ class MentalHealthPipeline:
                 frame_skip_counter = 0
                 # Process frame
                 result = self._process_frame(timestamped.frame, timestamp)
+                last_result = result
             else:
                 # Skip processing, use previous results for visualization
-                result = {'info': {'status': 'Frame skipped'}}
+                result = last_result.copy()
+                if 'info' not in result: result['info'] = {}
+                result['info']['status'] = 'Frame skipped'
             
             # Update visualization
             self.monitor.update(
@@ -141,6 +153,7 @@ class MentalHealthPipeline:
                 pose_result=result.get('pose'),
                 prediction=result.get('prediction'),
                 alert=result.get('alert'),
+                emotion_result=result.get('emotion_result'),
                 additional_info=result.get('info')
             )
             
@@ -190,6 +203,7 @@ class MentalHealthPipeline:
             self._last_emotion = emotion.emotion
             self._last_emotion_probs = emotion.probabilities
             result['info']['emotion'] = emotion.emotion
+            result['emotion_result'] = emotion  # Pass full object for visualization
         
         # Posture analysis
         posture_embedding = None
@@ -248,9 +262,9 @@ class MentalHealthPipeline:
         self.posture_temporal.reset_hidden()
 
 
-def run_demo(config: Config) -> None:
+def run_demo(config: Config, emotion_model: Optional['EmotionClassifier'] = None) -> None:
     """Run demo mode with visualization."""
-    pipeline = MentalHealthPipeline(config)
+    pipeline = MentalHealthPipeline(config, emotion_classifier=emotion_model)
     
     if pipeline.start():
         # Handle Ctrl+C gracefully
@@ -366,7 +380,7 @@ def main():
     if args.benchmark:
         run_benchmark(config, args.duration)
     else:
-        run_demo(config)
+        run_demo(config, emotion_model=trained_emotion_model)
 
 
 if __name__ == "__main__":

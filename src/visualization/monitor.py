@@ -9,6 +9,7 @@ import time
 
 from ..config import Config
 from ..facial.detector import FaceDetection
+from ..facial.emotion import EmotionResult
 from ..posture.pose_estimator import PoseResult
 from ..prediction.classifier import MentalHealthPrediction
 from ..prediction.calibration import Alert
@@ -83,6 +84,7 @@ class RealtimeMonitor:
                pose_result: Optional[PoseResult] = None,
                prediction: Optional[MentalHealthPrediction] = None,
                alert: Optional[Alert] = None,
+               emotion_result: Optional[EmotionResult] = None,
                additional_info: Optional[Dict] = None) -> np.ndarray:
         """
         Update display with current frame and analysis results.
@@ -93,6 +95,7 @@ class RealtimeMonitor:
             pose_result: Pose estimation result.
             prediction: Mental health prediction.
             alert: Current alert if any.
+            emotion_result: Facial emotion result.
             additional_info: Additional metrics to display.
             
         Returns:
@@ -117,7 +120,7 @@ class RealtimeMonitor:
         
         # Draw face detection
         if face_detection is not None:
-            annotated_frame = self._draw_face(annotated_frame, face_detection)
+            annotated_frame = self._draw_face(annotated_frame, face_detection, emotion_result)
         
         # Draw pose
         if pose_result is not None:
@@ -128,7 +131,7 @@ class RealtimeMonitor:
         
         # Draw side panel
         panel_x = w + 10
-        self._draw_panel(canvas, panel_x, prediction, alert, avg_fps, additional_info)
+        self._draw_panel(canvas, panel_x, prediction, alert, emotion_result, avg_fps, additional_info)
         
         # Draw privacy indicator
         self._draw_privacy_indicator(canvas, panel_x, h - 40)
@@ -139,7 +142,8 @@ class RealtimeMonitor:
         
         return canvas
     
-    def _draw_face(self, frame: np.ndarray, detection: FaceDetection) -> np.ndarray:
+    def _draw_face(self, frame: np.ndarray, detection: FaceDetection,
+                   emotion_result: Optional[EmotionResult] = None) -> np.ndarray:
         """Draw face detection overlay."""
         x1, y1, x2, y2 = detection.bbox
         
@@ -152,10 +156,20 @@ class RealtimeMonitor:
             x, y = int(lm[0]), int(lm[1])
             cv2.circle(frame, (x, y), 3, self.COLORS['secondary'], -1)
         
-        # Draw confidence
+        # Draw confidence and emotion
+        label_y = y1 - 10
+        
+        # Face confidence
         label = f"Face: {detection.confidence:.2f}"
-        cv2.putText(frame, label, (x1, y1 - 10),
+        cv2.putText(frame, label, (x1, label_y),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+        
+        # Emotion label
+        if emotion_result:
+            label_y -= 20
+            emo_label = f"{emotion_result.emotion.upper()} ({emotion_result.confidence:.2f})"
+            cv2.putText(frame, emo_label, (x1, label_y),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.COLORS['warning'], 2)
         
         return frame
     
@@ -199,6 +213,7 @@ class RealtimeMonitor:
     def _draw_panel(self, canvas: np.ndarray, x: int,
                     prediction: Optional[MentalHealthPrediction],
                     alert: Optional[Alert],
+                    emotion_result: Optional[EmotionResult],
                     fps: float,
                     additional_info: Optional[Dict]) -> None:
         """Draw side information panel."""
@@ -256,6 +271,34 @@ class RealtimeMonitor:
             cv2.putText(canvas, f"Primary: {prediction.primary_concern}", (x, y),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.COLORS['text'], 1)
             y += 40
+            
+        # Emotion Details Section
+        if emotion_result is not None:
+            cv2.putText(canvas, "Facial Emotion", (x, y),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.COLORS['text'], 1)
+            y += 25
+            
+            # Show top 3 emotions
+            sorted_probs = sorted(
+                emotion_result.probabilities.items(), 
+                key=lambda x: x[1], 
+                reverse=True
+            )[:3]
+            
+            for emo, prob in sorted_probs:
+                # Color based on emotion type (roughly)
+                if emo in ['happy', 'neutral', 'surprise']:
+                    color = self.COLORS['secondary']
+                elif emo in ['fear', 'sadness', 'disgust']:
+                    color = self.COLORS['warning']
+                else: # angry
+                    color = self.COLORS['danger']
+                    
+                cv2.putText(canvas, f"{emo.capitalize()}: {prob:.2f}", (x, y),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+                self._draw_confidence_bar(canvas, x + 150, y - 8, prob)
+                y += 20
+            y += 20
         
         # Alert section
         if alert is not None:
