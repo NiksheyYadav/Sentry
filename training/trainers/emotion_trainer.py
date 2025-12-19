@@ -56,7 +56,7 @@ class EmotionTrainer:
         # Loss function
         if class_weights is not None:
             class_weights = class_weights.to(device)
-        self.criterion = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=0.1)
+        self.criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
         
         # Optimizer - only for trainable parameters
         trainable_params = filter(lambda p: p.requires_grad, self.model.parameters())
