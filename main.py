@@ -336,6 +336,10 @@ def main():
         '--trained-model', type=str, default=None,
         help='Path to trained emotion model checkpoint to use instead of pretrained'
     )
+    parser.add_argument(
+        '--posture-model', type=str, default=None,
+        help='Path to trained posture model checkpoint (auto-detected from models/posture_trained/)'
+    )
     
     args = parser.parse_args()
     
