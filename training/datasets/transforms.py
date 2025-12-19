@@ -38,8 +38,7 @@ def get_train_transforms(
         transform_list.append(transforms.ColorJitter(
             brightness=0.2,
             contrast=0.2,
-            saturation=0.2,
-            hue=0.1
+            saturation=0.2
         ))
     
     transform_list.extend([
