@@ -184,6 +184,71 @@ python train.py download --dataset posture
 
 ---
 
+## Video Posture Dataset Downloads (`scripts/download_video_posture_datasets.py`)
+
+Download and preprocess video posture datasets for body language and mental state training.
+
+### Basic Usage
+
+```bash
+python scripts/download_video_posture_datasets.py --dataset all
+```
+
+### Arguments
+
+| Argument | Type | Default | Description |
+|----------|------|---------|-------------|
+| `--dataset` | Choice | `all` | Dataset to download: `all`, `multiposture`, `figshare`, `ntu_skeleton`, `cmu_panoptic` |
+| `--data-dir` | Path | `data/posture` | Output directory for downloaded data |
+| `--list` | Flag | - | List all available datasets |
+| `--setup-only` | Flag | - | Only setup toolbox (for CMU Panoptic) |
+
+### Available Datasets
+
+| Dataset | Size | Access Type | Description |
+|---------|------|-------------|-------------|
+| `multiposture` | ~5MB | Direct download | Body keypoints with posture labels |
+| `figshare` | ~10MB | Direct download | 50K OpenPose sit/stand keypoints |
+| `ntu_skeleton` | ~5.8GB | Google Drive | 25-joint skeleton, 60 action classes |
+| `cmu_panoptic` | Variable | Toolbox | Multi-view 3D body pose |
+
+### Examples
+
+```bash
+# List all available datasets
+python scripts/download_video_posture_datasets.py --list
+
+# Download all directly accessible datasets
+python scripts/download_video_posture_datasets.py --dataset all
+
+# Download specific dataset
+python scripts/download_video_posture_datasets.py --dataset figshare
+
+# Download NTU RGB+D skeleton data
+python scripts/download_video_posture_datasets.py --dataset ntu_skeleton
+
+# Setup CMU Panoptic toolbox
+python scripts/download_video_posture_datasets.py --dataset cmu_panoptic --setup-only
+
+# Specify custom output directory
+python scripts/download_video_posture_datasets.py --dataset all --data-dir data/video_posture
+```
+
+### Output Format
+
+All datasets are preprocessed to Sentry's training format:
+```
+data/posture/
+├── train/
+│   ├── sequences/*.npy
+│   └── labels.json
+├── val/
+│   ├── sequences/*.npy
+│   └── labels.json
+├── mean.npy
+└── std.npy
+```
+
 ### 6. Create Session Template
 
 Create a folder structure for recording custom video sessions.
@@ -216,4 +281,8 @@ python train.py evaluate --model models/emotion_trained/best_model.pth --data da
 
 # Get dataset info
 python train.py download --dataset posture
+
+# Download video posture datasets
+python scripts/download_video_posture_datasets.py --dataset all
 ```
+

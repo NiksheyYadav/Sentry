@@ -382,12 +382,15 @@ def train_posture_model(
         root_dir=data_dir,
         batch_size=batch_size,
         num_workers=num_workers,
-        sequence_length=sequence_length
     )
     
-    # Auto-detect input dimension from data
-    sample_seq, _ = train_loader.dataset[0]
-    input_dim = sample_seq.shape[-1]  # Last dimension is feature count
+    # Auto-detect input dimension from dataset
+    # The dataset standardizes all sequences to the max feature dimension
+    if hasattr(train_loader.dataset, 'feature_dim'):
+        input_dim = train_loader.dataset.feature_dim
+    else:
+        sample_seq, _ = train_loader.dataset[0]
+        input_dim = sample_seq.shape[-1]
     print(f"Detected input dimension: {input_dim}")
     
     # Create model with correct input dimension

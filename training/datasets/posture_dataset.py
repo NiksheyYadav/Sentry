@@ -119,6 +119,22 @@ class PostureSequenceDataset(Dataset):
         # Load sequences
         seq_files = list(seq_dir.glob('*.npy'))
         
+        # First pass: determine the maximum feature dimension
+        max_feature_dim = 0
+        for seq_file in seq_files:
+            try:
+                seq = np.load(seq_file)
+                if len(seq.shape) >= 2:
+                    max_feature_dim = max(max_feature_dim, seq.shape[1])
+            except:
+                continue
+        
+        if max_feature_dim == 0:
+            max_feature_dim = 99  # Default
+        
+        self.feature_dim = max_feature_dim
+        print(f"Using feature dimension: {max_feature_dim}")
+        
         for seq_file in seq_files:
             seq_name = seq_file.stem
             
@@ -127,6 +143,11 @@ class PostureSequenceDataset(Dataset):
             except Exception as e:
                 print(f"Error loading {seq_file}: {e}")
                 continue
+            
+            # Standardize feature dimension by padding if necessary
+            if len(sequence.shape) >= 2 and sequence.shape[1] < max_feature_dim:
+                padding = np.zeros((sequence.shape[0], max_feature_dim - sequence.shape[1]))
+                sequence = np.concatenate([sequence, padding], axis=1)
             
             # Get labels for this sequence
             seq_labels = labels_dict.get(seq_name, {

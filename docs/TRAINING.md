@@ -74,17 +74,40 @@ The posture model learns three tasks simultaneously:
 
 ### Recommended Datasets
 
-View download instructions:
+**Quick Download (Recommended):**
 ```bash
-python train.py download --dataset posture
+# Download all directly accessible datasets
+python scripts/download_video_posture_datasets.py --dataset all
+
+# List available datasets
+python scripts/download_video_posture_datasets.py --list
 ```
 
-| Dataset | Best For | Link |
-|---------|----------|------|
-| **BoLD** | Body language categories | https://cydar.ist.psu.edu/emotionchallenge/ |
-| **MultiPosture** | Sitting posture | https://zenodo.org/record/7155660 |
-| **Stress Dataset** | Stress/fidgeting | https://github.com/ggian/stress_dataset |
-| **URMC** | Psychiatric symptoms | arxiv.org/abs/2204.02037 |
+**Available Datasets:**
+
+| Dataset | Size | Access | Command |
+|---------|------|--------|---------|
+| **MultiPosture** | ~5MB | Direct | `--dataset multiposture` |
+| **Figshare Sit/Stand** | ~10MB | Direct | `--dataset figshare` |
+| **NTU RGB+D Skeleton** | ~5.8GB | Google Drive | `--dataset ntu_skeleton` |
+| **CMU Panoptic** | Variable | Toolbox | `--dataset cmu_panoptic` |
+
+**Dataset Details:**
+
+| Dataset | Best For | Description |
+|---------|----------|-------------|
+| **MultiPosture** | Sitting posture | Upper/lower body posture labels |
+| **Figshare** | Sit/stand | 50K OpenPose keypoints |
+| **NTU RGB+D** | Action recognition | 60-120 action classes with skeleton |
+| **CMU Panoptic** | 3D body pose | Multi-view social interactions |
+
+**Additional Datasets (Manual Download):**
+
+| Dataset | Link |
+|---------|------|
+| **BoLD** | https://cydar.ist.psu.edu/emotionchallenge/ |
+| **DAiSEE** | https://people.iith.ac.in/vineethnb/resources/daisee/ |
+| **MPII Pose** | http://human-pose.mpi-inf.mpg.de/ |
 
 ### Data Preparation
 
