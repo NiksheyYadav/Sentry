@@ -12,7 +12,7 @@ class VideoConfig:
     camera_id: int = 0
     capture_fps: int = 30
     process_fps: int = 30  # Process all frames at 30 FPS
-    frame_skip: int = 1  # Process every Nth frame (1 = no skip, 2 = every other frame)
+    frame_skip: int = 2  # Process every Nth frame (1 = no skip, 2 = every other frame)
     frame_width: int = 640
     frame_height: int = 480
     buffer_size: int = 300  # 10 seconds at 30 FPS

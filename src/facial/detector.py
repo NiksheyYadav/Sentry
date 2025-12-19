@@ -1,30 +1,36 @@
-# Face Detection Module
-# MTCNN-based face detection with landmark extraction
-
+import os
 import torch
 import numpy as np
 from typing import Optional, List, Tuple, NamedTuple
-from facenet_pytorch import MTCNN
 import cv2
+import mediapipe as mp
+from mediapipe.tasks import python
+from mediapipe.tasks.python import vision
+from pathlib import Path
+import urllib.request
 
 from ..config import FacialConfig
+
+# Model configuration
+MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite"
+MODEL_DIR = Path(__file__).parent.parent.parent / "models"
+MODEL_PATH = MODEL_DIR / "blaze_face_short_range.tflite"
 
 
 class FaceDetection(NamedTuple):
     """Detected face with metadata."""
     bbox: np.ndarray  # [x1, y1, x2, y2]
     confidence: float
-    landmarks: np.ndarray  # 5 facial landmarks
+    landmarks: np.ndarray  # facial landmarks
     face_image: np.ndarray  # Cropped face (RGB)
     padded_bbox: np.ndarray  # Padded bounding box
 
 
 class FaceDetector:
     """
-    MTCNN-based face detector with landmark extraction.
+    MediaPipe Tasks API-based face detector.
     
-    Provides face detection with appropriate padding and
-    facial landmarks for downstream analysis.
+    Provides high-speed face detection for real-time performance.
     """
     
     def __init__(self, config: Optional[FacialConfig] = None, device: str = "cuda"):
@@ -33,23 +39,44 @@ class FaceDetector:
         
         Args:
             config: Facial analysis configuration.
-            device: Computation device ("cuda" or "cpu").
+            device: Computation device.
         """
         self.config = config or FacialConfig()
-        self.device = device if torch.cuda.is_available() else "cpu"
         
-        self._mtcnn = MTCNN(
-            image_size=160,
-            margin=0,
-            min_face_size=self.config.min_face_size,
-            thresholds=self.config.mtcnn_thresholds,
-            factor=0.709,
-            post_process=False,
-            select_largest=False,  # Detect all faces
-            keep_all=True,
-            device=self.device
+        # Ensure model exists
+        self._ensure_model_exists()
+        
+        # Initialize MediaPipe Face Detection
+        base_options = python.BaseOptions(model_asset_path=str(MODEL_PATH))
+        
+        # Try to enable GPU delegate
+        if torch.cuda.is_available() and device == "cuda":
+            try:
+                base_options.delegate = python.BaseOptions.Delegate.GPU
+                print("  - Face Detector GPU delegate enabled")
+            except Exception as e:
+                print(f"  - Warning: Could not enable Face Detector GPU delegate: {e}")
+        
+        options = vision.FaceDetectorOptions(
+            base_options=base_options,
+            running_mode=vision.RunningMode.VIDEO,
+            min_detection_confidence=0.5
         )
+        
+        self._detector = vision.FaceDetector.create_from_options(options)
+        self._frame_timestamp_ms = 0
     
+    def _ensure_model_exists(self):
+        """Download model if it doesn't exist."""
+        if not MODEL_PATH.exists():
+            print(f"Downloading face detection model to {MODEL_PATH}...")
+            MODEL_DIR.mkdir(parents=True, exist_ok=True)
+            try:
+                urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
+                print("Download complete.")
+            except Exception as e:
+                raise RuntimeError(f"Failed to download face detection model: {e}")
+
     def detect(self, frame: np.ndarray) -> List[FaceDetection]:
         """
         Detect faces in a frame.
@@ -60,37 +87,58 @@ class FaceDetector:
         Returns:
             List of FaceDetection objects.
         """
-        # Convert BGR to RGB if needed
+        # Convert BGR to RGB
         if len(frame.shape) == 3 and frame.shape[2] == 3:
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         else:
             frame_rgb = frame
         
-        # Detect faces
-        boxes, probs, landmarks = self._mtcnn.detect(frame_rgb, landmarks=True)
+        h, w = frame_rgb.shape[:2]
         
-        if boxes is None:
+        # Create MediaPipe Image
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame_rgb)
+        
+        # Increment timestamp
+        self._frame_timestamp_ms += 33  # ~30fps
+        
+        # Detect faces
+        results = self._detector.detect_for_video(mp_image, self._frame_timestamp_ms)
+        
+        if not results.detections:
             return []
         
         detections = []
-        for i, (box, prob, lm) in enumerate(zip(boxes, probs, landmarks)):
-            if prob < self.config.mtcnn_thresholds[0]:
-                continue
+        for detection in results.detections:
+            # Get bounding box
+            bbox_data = detection.bounding_box
+            x1, y1 = bbox_data.origin_x, bbox_data.origin_y
+            width, height = bbox_data.width, bbox_data.height
+            x2, y2 = x1 + width, y1 + height
+            
+            bbox = np.array([x1, y1, x2, y2])
+            prob = detection.categories[0].score
+            
+            # Get landmarks (6 points usually)
+            landmarks = []
+            if detection.keypoints:
+                for kp in detection.keypoints:
+                    landmarks.append([kp.x * w, kp.y * h])
+            landmarks = np.array(landmarks)
             
             # Calculate padded bounding box
-            padded_box = self._add_padding(box, frame.shape)
+            padded_box = self._add_padding(bbox, frame.shape)
             
             # Crop face with padding
             face_img = self._crop_face(frame_rgb, padded_box)
             
-            detection = FaceDetection(
-                bbox=box.astype(np.int32),
+            face_det = FaceDetection(
+                bbox=bbox.astype(np.int32),
                 confidence=float(prob),
-                landmarks=lm,
+                landmarks=landmarks,
                 face_image=face_img,
                 padded_bbox=padded_box.astype(np.int32)
             )
-            detections.append(detection)
+            detections.append(face_det)
         
         return detections
     
@@ -123,70 +171,36 @@ class FaceDetector:
         # Resize to standard size
         if face.size > 0:
             face = cv2.resize(face, (224, 224), interpolation=cv2.INTER_LINEAR)
+        else:
+            # Fallback for empty crops
+            face = np.zeros((224, 224, 3), dtype=np.uint8)
         
         return face
     
     def detect_largest(self, frame: np.ndarray) -> Optional[FaceDetection]:
         """
         Detect the largest face in frame.
-        
-        Args:
-            frame: Input frame.
-            
-        Returns:
-            Largest FaceDetection or None if no face found.
         """
         detections = self.detect(frame)
-        
         if not detections:
             return None
-        
-        # Find largest by area
-        largest = max(detections, key=lambda d: 
-            (d.bbox[2] - d.bbox[0]) * (d.bbox[3] - d.bbox[1])
-        )
-        
-        return largest
+        return max(detections, key=lambda d: (d.bbox[2]-d.bbox[0]) * (d.bbox[3]-d.bbox[1]))
     
     def get_face_roi(self, frame: np.ndarray, detection: FaceDetection) -> np.ndarray:
-        """
-        Get face region of interest resized for model input.
-        
-        Args:
-            frame: Original frame.
-            detection: Face detection result.
-            
-        Returns:
-            224x224 RGB face image normalized for model input.
-        """
+        """Get face ROI."""
         return detection.face_image
     
     def draw_detections(self, frame: np.ndarray, detections: List[FaceDetection]) -> np.ndarray:
-        """
-        Draw detection boxes and landmarks on frame.
-        
-        Args:
-            frame: Frame to draw on (BGR).
-            detections: List of detections.
-            
-        Returns:
-            Annotated frame.
-        """
+        """Draw detections."""
         annotated = frame.copy()
-        
         for det in detections:
-            # Draw bounding box
             x1, y1, x2, y2 = det.bbox
             cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            
-            # Draw confidence
-            label = f"{det.confidence:.2f}"
-            cv2.putText(annotated, label, (x1, y1 - 10), 
+            cv2.putText(annotated, f"{det.confidence:.2f}", (x1, y1 - 10), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-            
-            # Draw landmarks
-            for lm in det.landmarks:
-                x, y = int(lm[0]), int(lm[1])
-                cv2.circle(annotated, (x, y), 2, (255, 0, 0), -1)
-        
         return annotated
+    
+    def close(self):
+        """Clean up resources."""
+        if hasattr(self, '_detector'):
+            self._detector.close()

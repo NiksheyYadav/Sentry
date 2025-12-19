@@ -24,7 +24,7 @@ class ModelEvaluator:
     Comprehensive evaluation and visualization for trained models.
     """
     
-    EMOTION_LABELS = ['angry', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise']
+    EMOTION_LABELS = ['neutral', 'happy', 'sad', 'surprise', 'fear', 'anger']
     
     def __init__(self, model: nn.Module, device: str = 'cuda'):
         """
@@ -43,7 +43,7 @@ class ModelEvaluator:
         self.probabilities = []
     
     @torch.no_grad()
-    def evaluate(self, dataloader: DataLoader, num_classes: int = 7) -> Dict:
+    def evaluate(self, dataloader: DataLoader, num_classes: int = 6) -> Dict:
         """
         Evaluate model on dataset.
         
@@ -326,11 +326,11 @@ def evaluate_trained_model(
     model.load_state_dict(checkpoint['model_state_dict'])
     
     # Load data
-    _, val_loader = create_affectnet_loaders(data_dir, batch_size=64)
+    _, val_loader = create_affectnet_loaders(data_dir, batch_size=64, num_classes=6)
     
     # Evaluate
     evaluator = ModelEvaluator(model, device)
-    metrics = evaluator.evaluate(val_loader)
+    metrics = evaluator.evaluate(val_loader, num_classes=6)
     
     # Print summary
     evaluator.print_summary(metrics)

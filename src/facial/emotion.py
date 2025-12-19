@@ -91,10 +91,10 @@ class EmotionClassifier(nn.Module):
         
         # Classification head with stronger regularization
         self.classifier = nn.Sequential(
-            nn.Linear(self.config.embedding_dim, 256),  # Reduced size
+            nn.Linear(self.config.embedding_dim, 512),
             nn.ReLU(inplace=True),
             nn.Dropout(0.5),  # Increased dropout
-            nn.Linear(256, self.num_classes)
+            nn.Linear(512, self.num_classes)
         )
         
         # Preprocessing (Grayscale)
@@ -153,12 +153,16 @@ class EmotionClassifier(nn.Module):
         input_tensor = self.preprocess(face_image)
         input_tensor = input_tensor.unsqueeze(0).to(self._device)
         
+        # Use FP16 if on CUDA
+        use_amp = (self._device == "cuda" or (isinstance(self._device, torch.device) and self._device.type == "cuda"))
+        
         with torch.no_grad():
-            logits, embedding = self.forward(input_tensor)
-            probs = F.softmax(logits, dim=1)
+            with torch.cuda.amp.autocast(enabled=use_amp):
+                logits, embedding = self.forward(input_tensor)
+                probs = F.softmax(logits, dim=1)
         
         # Get prediction
-        probs_np = probs.cpu().numpy()[0]
+        probs_np = probs.cpu().float().numpy()[0]
         pred_idx = np.argmax(probs_np)
         
         # Build probability dictionary
