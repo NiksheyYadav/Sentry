@@ -48,6 +48,7 @@ class PostureConfig:
         'left_hip': 23, 'right_hip': 24, 'left_ear': 7, 'right_ear': 8
     })
     # Temporal model settings
+    input_dim: int = 100  # 100 for MultiPosture, 15 for live extractor
     tcn_channels: List[int] = field(default_factory=lambda: [64, 128, 256])
     tcn_kernel_size: int = 3
     lstm_hidden_size: int = 128

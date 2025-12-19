@@ -121,8 +121,8 @@ class PostureTemporalModel(nn.Module):
         super().__init__()
         self.config = config or PostureConfig()
         
-        # Input dimension (from feature extractor)
-        self.input_dim = 15  # Geometric + movement features
+        # Input dimension - 100 for MultiPosture dataset, 15 for live feature extractor
+        self.input_dim = getattr(self.config, 'input_dim', 100)
         
         # TCN encoder
         self.tcn = TCNEncoder(
