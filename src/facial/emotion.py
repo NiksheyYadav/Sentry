@@ -56,6 +56,24 @@ class EmotionClassifier(nn.Module):
             self.backbone = densenet121(weights=weights)
         else:
             self.backbone = densenet121(weights=None)
+            
+        # Modify first convolution for 1-channel input (Grayscale)
+        # DenseNet121 features.conv0 is Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        old_conv = self.backbone.features.conv0
+        new_conv = nn.Conv2d(
+            1, old_conv.out_channels,
+            kernel_size=old_conv.kernel_size,
+            stride=old_conv.stride,
+            padding=old_conv.padding,
+            bias=old_conv.bias is not None
+        )
+        
+        # Initialize 1-channel weights by averaging RGB weights
+        if pretrained:
+            with torch.no_grad():
+                new_conv.weight.data = old_conv.weight.data.mean(dim=1, keepdim=True)
+        
+        self.backbone.features.conv0 = new_conv
         
         # Get embedding dimension from backbone
         # self.embedding_dim = self.backbone.classifier[0].in_features  # 960 (MobileNetV3)
@@ -79,14 +97,15 @@ class EmotionClassifier(nn.Module):
             nn.Linear(512, self.num_classes)
         )
         
-        # Preprocessing
+        # Preprocessing (Grayscale)
         self.preprocess = transforms.Compose([
             transforms.ToPILImage(),
+            transforms.Grayscale(num_output_channels=1),
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
             transforms.Normalize(
-                mean=[0.485, 0.456, 0.406],
-                std=[0.229, 0.224, 0.225]
+                mean=[0.5],
+                std=[0.5]
             )
         ])
         

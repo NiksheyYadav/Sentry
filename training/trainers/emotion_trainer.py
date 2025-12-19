@@ -56,7 +56,7 @@ class EmotionTrainer:
         # Loss function
         if class_weights is not None:
             class_weights = class_weights.to(device)
-        self.criterion = nn.CrossEntropyLoss(weight=class_weights)
+        self.criterion = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=0.1)
         
         # Optimizer - only for trainable parameters
         trainable_params = filter(lambda p: p.requires_grad, self.model.parameters())
@@ -194,7 +194,7 @@ class EmotionTrainer:
         self,
         epochs: int = 20,
         save_dir: Optional[str] = None,
-        early_stopping: int = 5
+        early_stopping: Optional[int] = None
     ) -> Dict:
         """
         Full training loop.
@@ -252,7 +252,7 @@ class EmotionTrainer:
                 print(f"  -> Periodic checkpoint saved at epoch {epoch+1}")
             
             # Early stopping
-            if no_improvement >= early_stopping:
+            if early_stopping is not None and no_improvement >= early_stopping:
                 print(f"Early stopping after {early_stopping} epochs without improvement")
                 break
         
@@ -320,7 +320,7 @@ def train_emotion_model(
             batch_size=batch_size,
             num_workers=num_workers
         )
-        num_classes = 7
+        num_classes = 6
     else:
         train_loader, val_loader = create_fer2013_loaders(
             data_dir, 
@@ -334,9 +334,10 @@ def train_emotion_model(
     from src.config import FacialConfig
     
     # Update emotion classes based on num_classes
-    emotion_classes = ['angry', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise'][:num_classes]
-    if num_classes == 8:
-        emotion_classes.append('contempt')
+    # 0:neutral, 1:happy, 2:sad, 3:surprise, 4:fear, 5:anger
+    emotion_classes = ['neutral', 'happy', 'sad', 'surprise', 'fear', 'anger']
+    if num_classes != 6:
+        print(f"Warning: Expected 6 classes, got {num_classes}. Classes might be misaligned.")
     
     config = FacialConfig(emotion_classes=emotion_classes)
     model = EmotionClassifier(config)
@@ -361,7 +362,7 @@ def train_emotion_model(
     history = trainer.train(
         epochs=epochs,
         save_dir=output_dir,
-        early_stopping=5
+        early_stopping=None
     )
     
     return history

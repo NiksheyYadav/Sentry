@@ -25,7 +25,7 @@ class FacialConfig:
     face_padding: float = 0.2  # 20% padding around face
     min_face_size: int = 40
     emotion_classes: List[str] = field(default_factory=lambda: [
-        'angry', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise'
+        'neutral', 'happy', 'sad', 'surprise', 'fear', 'anger'
     ])
     embedding_dim: int = 1280  # MobileNetV3 penultimate layer
     action_units: List[str] = field(default_factory=lambda: [

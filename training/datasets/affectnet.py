@@ -15,55 +15,28 @@ import pandas as pd
 class AffectNetDataset(Dataset):
     """
     AffectNet Dataset loader for emotion classification.
-    
-    Supports multiple Kaggle versions:
-    - mstjebashazida/affectnet (folder structure)
-    - Young AffectNet HQ (high quality version)
-    
-    8 emotion classes: neutral, happy, sad, surprise, fear, disgust, anger, contempt
     """
     
-    # Standard AffectNet emotion mapping
+    # 6 emotion classes: neutral, happy, sad, surprise, fear, anger
     EMOTION_LABELS = {
         0: 'neutral',
         1: 'happy', 
         2: 'sad',
         3: 'surprise',
         4: 'fear',
-        5: 'disgust',
-        6: 'anger',
-        7: 'contempt'
+        5: 'anger'
     }
     
-    # Map to 7 classes (exclude contempt for compatibility with FER2013)
-    EMOTION_LABELS_7 = {
-        0: 'neutral',
-        1: 'happy',
-        2: 'sad', 
-        3: 'surprise',
-        4: 'fear',
-        5: 'disgust',
-        6: 'angry'  # 'anger' -> 'angry' for consistency
-    }
+    EMOTION_LABELS_7 = EMOTION_LABELS
     
     def __init__(
         self,
         root_dir: str,
         split: str = 'train',
         transform: Optional[transforms.Compose] = None,
-        num_classes: int = 7,
+        num_classes: int = 6,
         max_samples: Optional[int] = None
     ):
-        """
-        Initialize AffectNet dataset.
-        
-        Args:
-            root_dir: Path to dataset root (extracted Kaggle folder)
-            split: 'train' or 'val' 
-            transform: Image transforms to apply
-            num_classes: 7 or 8 emotion classes
-            max_samples: Limit samples per class for faster training
-        """
         self.root_dir = Path(root_dir)
         self.split = split
         self.transform = transform
@@ -85,14 +58,12 @@ class AffectNetDataset(Dataset):
             ])
     
     def _load_samples(self) -> List[Tuple[Path, int]]:
-        """Load sample paths and labels."""
         samples = []
         
-        # Emotion name to label mapping (for named folders)
+        # Emotion name to label mapping (remapped to 0-5)
         EMOTION_NAME_TO_LABEL = {
             'neutral': 0, 'happy': 1, 'sad': 2, 'surprise': 3,
-            'fear': 4, 'disgust': 5, 'anger': 6, 'angry': 6, 
-            'contempt': 7
+            'fear': 4, 'anger': 5, 'angry': 5
         }
         
         # Try different folder structures
@@ -108,25 +79,29 @@ class AffectNetDataset(Dataset):
                 break
         
         if split_dir and split_dir.exists():
-            # Check if folders are named (anger, happy) or numbered (0, 1, 2)
             subdirs = [d for d in split_dir.iterdir() if d.is_dir()]
             
             for subdir in subdirs:
                 folder_name = subdir.name.lower()
                 
-                # Try to get label from folder name
+                label = -1
                 if folder_name in EMOTION_NAME_TO_LABEL:
                     label = EMOTION_NAME_TO_LABEL[folder_name]
                 elif folder_name.isdigit():
-                    label = int(folder_name)
-                else:
+                    orig_label = int(folder_name)
+                    if orig_label == 5 or orig_label == 7:
+                        continue 
+                    
+                    if orig_label == 6:
+                        label = 5 
+                    elif orig_label < 5:
+                        label = orig_label
+                    else:
+                        continue
+                
+                if label == -1:
                     continue
                 
-                # Skip if label exceeds num_classes
-                if label >= self.num_classes:
-                    continue
-                
-                # Get all images
                 images = list(subdir.glob('*.jpg')) + list(subdir.glob('*.png')) + list(subdir.glob('*.jpeg'))
                 
                 if self.max_samples:
@@ -142,36 +117,41 @@ class AffectNetDataset(Dataset):
                 df = pd.read_csv(csv_path)
                 for _, row in df.iterrows():
                     img_path = self.root_dir / 'images' / row['image']
-                    label = int(row['label'])
-                    if label < self.num_classes and img_path.exists():
+                    orig_label = int(row['label'])
+                    
+                    label = -1
+                    if orig_label == 5 or orig_label == 7:
+                        continue
+                    
+                    if orig_label == 6:
+                        label = 5
+                    elif orig_label < 5:
+                        label = orig_label
+                        
+                    if label != -1 and img_path.exists():
                         samples.append((img_path, label))
         
         print(f"Loaded {len(samples)} samples for {self.split} split")
         return samples
-        return samples
-    
+
     def __len__(self) -> int:
         return len(self.samples)
     
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
         img_path, label = self.samples[idx]
         
-        # Load image
         try:
             image = Image.open(img_path).convert('RGB')
         except Exception as e:
             print(f"Error loading {img_path}: {e}")
-            # Return a placeholder
             image = Image.new('RGB', (224, 224), color='gray')
         
-        # Apply transforms
         if self.transform:
             image = self.transform(image)
         
         return image, label
     
     def get_class_weights(self) -> torch.Tensor:
-        """Calculate class weights for imbalanced data."""
         labels = [s[1] for s in self.samples]
         counts = np.bincount(labels, minlength=self.num_classes)
         weights = 1.0 / (counts + 1e-6)
@@ -179,49 +159,13 @@ class AffectNetDataset(Dataset):
         return torch.FloatTensor(weights)
     
     def get_label_name(self, label: int) -> str:
-        """Get emotion name for label."""
         if self.num_classes == 7:
             return self.EMOTION_LABELS_7.get(label, 'unknown')
         return self.EMOTION_LABELS.get(label, 'unknown')
     
     @staticmethod
     def download_instructions() -> str:
-        """Return download instructions."""
-        return """
-AffectNet Download Instructions:
-================================
-
-Option 1: Kaggle (Easiest)
---------------------------
-1. Go to: https://www.kaggle.com/datasets/mstjebashazida/affectnet
-2. Click "Download" (requires Kaggle account)
-3. Extract to: c:\\sentry\\data\\affectnet\\
-
-Or use Kaggle CLI:
-    kaggle datasets download -d mstjebashazida/affectnet
-    unzip affectnet.zip -d data/affectnet/
-
-Option 2: Young AffectNet HQ
-----------------------------
-Higher quality version available at:
-https://www.kaggle.com/code/arkhanzada/facial-emotions-classification-affectnet-dataset/input
-
-Expected folder structure after extraction:
-data/affectnet/
-├── train/
-│   ├── 0/  (neutral)
-│   ├── 1/  (happy)
-│   ├── 2/  (sad)
-│   ├── 3/  (surprise)
-│   ├── 4/  (fear)
-│   ├── 5/  (disgust)
-│   ├── 6/  (anger)
-│   └── 7/  (contempt) - optional
-└── val/
-    ├── 0/
-    ├── 1/
-    ...
-"""
+        return "Download instructions placeholder."
 
 
 def create_affectnet_loaders(
@@ -231,19 +175,6 @@ def create_affectnet_loaders(
     num_classes: int = 7,
     max_samples_per_class: Optional[int] = None
 ) -> Tuple[DataLoader, DataLoader]:
-    """
-    Create train and validation data loaders.
-    
-    Args:
-        root_dir: Path to AffectNet dataset
-        batch_size: Batch size for training
-        num_workers: Number of data loading workers
-        num_classes: 7 or 8 emotion classes
-        max_samples_per_class: Limit samples for faster training
-        
-    Returns:
-        Tuple of (train_loader, val_loader)
-    """
     from .transforms import get_train_transforms, get_val_transforms
     
     train_dataset = AffectNetDataset(
