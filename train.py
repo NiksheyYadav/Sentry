@@ -126,18 +126,37 @@ def create_session(args):
 
 def evaluate_model(args):
     """Evaluate trained model and generate visualizations."""
-    from training.evaluation import evaluate_trained_model
+    import torch
     
     print(f"Evaluating model: {args.model}")
     print(f"Data directory: {args.data}")
     print(f"Output directory: {args.output}")
     
-    metrics = evaluate_trained_model(
-        model_path=args.model,
-        data_dir=args.data,
-        output_dir=args.output,
-        device='cuda' if not args.cpu else 'cpu'
-    )
+    # Detect model type from checkpoint
+    checkpoint = torch.load(args.model, map_location='cpu')
+    state_dict_keys = list(checkpoint.get('model_state_dict', checkpoint).keys())
+    
+    # Check if it's a posture model (has TCN/LSTM layers) or emotion model (has backbone)
+    is_posture_model = any('tcn' in k or 'lstm' in k for k in state_dict_keys)
+    
+    if is_posture_model:
+        print("Detected: Posture model")
+        from training.evaluation import evaluate_posture_model
+        metrics = evaluate_posture_model(
+            model_path=args.model,
+            data_dir=args.data,
+            output_dir=args.output,
+            device='cuda' if not args.cpu else 'cpu'
+        )
+    else:
+        print("Detected: Emotion model")
+        from training.evaluation import evaluate_trained_model
+        metrics = evaluate_trained_model(
+            model_path=args.model,
+            data_dir=args.data,
+            output_dir=args.output,
+            device='cuda' if not args.cpu else 'cpu'
+        )
     
     print(f"\nEvaluation complete!")
     print(f"Results saved to {args.output}")

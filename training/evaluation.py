@@ -356,6 +356,186 @@ def evaluate_trained_model(
     return metrics
 
 
+def evaluate_posture_model(
+    model_path: str,
+    data_dir: str,
+    output_dir: str = 'evaluation_results',
+    device: str = 'cuda'
+) -> Dict:
+    """
+    Evaluate trained posture model on multi-task metrics.
+    
+    Args:
+        model_path: Path to posture model checkpoint
+        data_dir: Path to posture dataset
+        output_dir: Directory for evaluation outputs
+        device: Computation device
+        
+    Returns:
+        Metrics dictionary
+    """
+    from src.posture.temporal_model import PostureTemporalModel
+    from src.config import PostureConfig
+    from training.datasets.posture_dataset import create_posture_loaders
+    
+    # Create output directory
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    
+    device = device if torch.cuda.is_available() else 'cpu'
+    
+    # Load data first to get input dimension
+    _, val_loader = create_posture_loaders(data_dir, batch_size=32)
+    
+    # Get feature dimension from dataset
+    if hasattr(val_loader.dataset, 'feature_dim'):
+        input_dim = val_loader.dataset.feature_dim
+    else:
+        sample, _ = val_loader.dataset[0]
+        input_dim = sample.shape[-1]
+    
+    print(f"Input dimension: {input_dim}")
+    
+    # Create model with correct input dimension
+    config = PostureConfig()
+    config.input_dim = input_dim
+    model = PostureTemporalModel(config)
+    
+    # Load checkpoint
+    print(f"Loading model from {model_path}")
+    checkpoint = torch.load(model_path, map_location=device)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    model = model.to(device)
+    model.eval()
+    
+    # Evaluate
+    posture_preds, posture_labels = [], []
+    stress_preds, stress_labels = [], []
+    trajectory_preds, trajectory_labels = [], []
+    
+    print("Evaluating posture model...")
+    with torch.no_grad():
+        for sequences, labels in tqdm(val_loader):
+            sequences = sequences.to(device)
+            
+            embedding, trajectory_logits, _ = model(sequences)
+            posture_logits = model.posture_classifier(embedding)
+            stress_logits = model.stress_classifier(embedding)
+            
+            posture_preds.extend(posture_logits.argmax(dim=1).cpu().numpy())
+            stress_preds.extend(stress_logits.argmax(dim=1).cpu().numpy())
+            trajectory_preds.extend(trajectory_logits.argmax(dim=1).cpu().numpy())
+            
+            posture_labels.extend(labels['posture'].numpy())
+            stress_labels.extend(labels['stress'].numpy())
+            trajectory_labels.extend(labels['trajectory'].numpy())
+    
+    # Compute metrics
+    posture_acc = accuracy_score(posture_labels, posture_preds)
+    stress_acc = accuracy_score(stress_labels, stress_preds)
+    trajectory_acc = accuracy_score(trajectory_labels, trajectory_preds)
+    
+    overall_acc = (posture_acc + stress_acc + trajectory_acc) / 3
+    
+    metrics = {
+        'overall_accuracy': overall_acc,
+        'posture_accuracy': posture_acc,
+        'stress_accuracy': stress_acc,
+        'trajectory_accuracy': trajectory_acc,
+        'posture_f1': f1_score(posture_labels, posture_preds, average='weighted'),
+        'stress_f1': f1_score(stress_labels, stress_preds, average='weighted'),
+        'trajectory_f1': f1_score(trajectory_labels, trajectory_preds, average='weighted'),
+        'num_samples': len(posture_labels)
+    }
+    
+    # Print summary
+    print("\n" + "="*60)
+    print("POSTURE MODEL EVALUATION")
+    print("="*60)
+    print(f"\nOverall Accuracy: {overall_acc*100:.2f}%")
+    print(f"\nPer-Task Performance:")
+    print(f"  Posture:    {posture_acc*100:.2f}% (F1: {metrics['posture_f1']:.3f})")
+    print(f"  Stress:     {stress_acc*100:.2f}% (F1: {metrics['stress_f1']:.3f})")
+    print(f"  Trajectory: {trajectory_acc*100:.2f}% (F1: {metrics['trajectory_f1']:.3f})")
+    print(f"\nTotal samples: {metrics['num_samples']}")
+    print("="*60)
+    
+    # Plot confusion matrices
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    
+    POSTURE_LABELS = ['upright', 'slouched', 'open', 'closed']
+    STRESS_LABELS = ['calm', 'fidgeting', 'restless', 'stillness']
+    TRAJECTORY_LABELS = ['stable', 'deteriorating', 'improving']
+    
+    # Posture confusion matrix
+    cm_posture = confusion_matrix(posture_labels, posture_preds)
+    sns.heatmap(cm_posture, annot=True, fmt='d', cmap='Blues', ax=axes[0],
+                xticklabels=POSTURE_LABELS[:len(set(posture_labels))],
+                yticklabels=POSTURE_LABELS[:len(set(posture_labels))])
+    axes[0].set_title(f'Posture ({posture_acc*100:.1f}%)')
+    axes[0].set_xlabel('Predicted')
+    axes[0].set_ylabel('True')
+    
+    # Stress confusion matrix
+    cm_stress = confusion_matrix(stress_labels, stress_preds)
+    sns.heatmap(cm_stress, annot=True, fmt='d', cmap='Greens', ax=axes[1],
+                xticklabels=STRESS_LABELS[:len(set(stress_labels))],
+                yticklabels=STRESS_LABELS[:len(set(stress_labels))])
+    axes[1].set_title(f'Stress ({stress_acc*100:.1f}%)')
+    axes[1].set_xlabel('Predicted')
+    axes[1].set_ylabel('True')
+    
+    # Trajectory confusion matrix
+    cm_trajectory = confusion_matrix(trajectory_labels, trajectory_preds)
+    sns.heatmap(cm_trajectory, annot=True, fmt='d', cmap='Oranges', ax=axes[2],
+                xticklabels=TRAJECTORY_LABELS[:len(set(trajectory_labels))],
+                yticklabels=TRAJECTORY_LABELS[:len(set(trajectory_labels))])
+    axes[2].set_title(f'Trajectory ({trajectory_acc*100:.1f}%)')
+    axes[2].set_xlabel('Predicted')
+    axes[2].set_ylabel('True')
+    
+    plt.tight_layout()
+    plt.savefig(output_path / 'posture_confusion_matrices.png', dpi=150)
+    print(f"\nConfusion matrices saved to {output_path / 'posture_confusion_matrices.png'}")
+    
+    # Plot training history if available
+    history_path = Path(model_path).parent / 'history.json'
+    if history_path.exists():
+        with open(history_path) as f:
+            history = json.load(f)
+        
+        fig2, axes2 = plt.subplots(1, 2, figsize=(14, 5))
+        epochs = range(1, len(history['train_loss']) + 1)
+        
+        axes2[0].plot(epochs, history['train_loss'], 'b-', label='Train')
+        axes2[0].plot(epochs, history['val_loss'], 'r-', label='Val')
+        axes2[0].set_xlabel('Epoch')
+        axes2[0].set_ylabel('Loss')
+        axes2[0].set_title('Loss Curves')
+        axes2[0].legend()
+        axes2[0].grid(True, alpha=0.3)
+        
+        axes2[1].plot(epochs, history['train_acc'], 'b-', label='Train')
+        axes2[1].plot(epochs, history['val_acc'], 'r-', label='Val')
+        axes2[1].set_xlabel('Epoch')
+        axes2[1].set_ylabel('Accuracy (%)')
+        axes2[1].set_title('Accuracy Curves')
+        axes2[1].legend()
+        axes2[1].grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig(output_path / 'posture_training_curves.png', dpi=150)
+        print(f"Training curves saved to {output_path / 'posture_training_curves.png'}")
+    
+    # Save metrics
+    with open(output_path / 'posture_metrics.json', 'w') as f:
+        json.dump(metrics, f, indent=2)
+    
+    print(f"\nMetrics saved to {output_path / 'posture_metrics.json'}")
+    
+    return metrics
+
+
 if __name__ == '__main__':
     import argparse
     
