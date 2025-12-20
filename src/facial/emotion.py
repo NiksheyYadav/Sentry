@@ -157,7 +157,7 @@ class EmotionClassifier(nn.Module):
         use_amp = (self._device == "cuda" or (isinstance(self._device, torch.device) and self._device.type == "cuda"))
         
         with torch.no_grad():
-            with torch.cuda.amp.autocast(enabled=use_amp):
+            with torch.amp.autocast('cuda', enabled=use_amp):
                 logits, embedding = self.forward(input_tensor)
                 probs = F.softmax(logits, dim=1)
         

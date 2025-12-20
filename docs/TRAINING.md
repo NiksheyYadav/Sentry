@@ -87,6 +87,29 @@ kaggle datasets download -d mstjebashazida/affectnet
 - Folder structure: `train/0/`, `train/1/`, etc.
 - CSV format: `labels.csv` with columns `image,label` or `subDirectory,image,expression`
 
+#### CK+ (Cohn-Kanade Extended - Small but Clean)
+
+```bash
+# Download from Kaggle
+kaggle datasets download zhiguocui/ck-dataset
+
+# Extract
+unzip ck-dataset.zip -d data/ck/
+```
+
+**Structure:**
+```
+data/ck/
+├── angry/
+├── fear/
+├── happy/
+├── neutral/
+├── sad/
+└── surprise/
+```
+
+> **Note**: CK+ is a small (~1000 images) but high-quality posed dataset. Balanced training uses 400 samples per class (via augmentation).
+
 ---
 
 ### Training Commands

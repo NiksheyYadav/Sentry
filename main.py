@@ -292,11 +292,11 @@ def run_demo(config: Config, emotion_model: Optional['EmotionClassifier'] = None
         pipeline.run()
 
 
-def run_benchmark(config: Config, duration: int = 60) -> None:
+def run_benchmark(config: Config, duration: int = 60, emotion_model: Optional['EmotionClassifier'] = None) -> None:
     """Run performance benchmark."""
     print(f"Running {duration}s performance benchmark...")
     
-    pipeline = MentalHealthPipeline(config)
+    pipeline = MentalHealthPipeline(config, emotion_classifier=emotion_model)
     
     if not pipeline.start():
         return
@@ -392,7 +392,7 @@ def main():
     
     # Run requested mode
     if args.benchmark:
-        run_benchmark(config, args.duration)
+        run_benchmark(config, args.duration, emotion_model=trained_emotion_model)
     else:
         run_demo(config, emotion_model=trained_emotion_model)
 

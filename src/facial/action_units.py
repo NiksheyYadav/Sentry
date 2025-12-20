@@ -135,7 +135,7 @@ class ActionUnitDetector(nn.Module):
         use_amp = (self._device == "cuda" or (isinstance(self._device, torch.device) and self._device.type == "cuda"))
         
         with torch.no_grad():
-            with torch.cuda.amp.autocast(enabled=use_amp):
+            with torch.amp.autocast('cuda', enabled=use_amp):
                 au_intensities = self.forward(input_tensor)
                 patterns = self.pattern_detector(au_intensities / 5.0)  # Normalize for pattern detection
         

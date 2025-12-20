@@ -9,12 +9,19 @@ Changelog for the Sentry Mental Health Assessment Framework.
 ### Bugfixes
 - **Fixed train.py not using balanced training**
   - Added `--balance`, `--target-samples`, `--aggressive` flags
-  - Auto-detects dataset type from path (fer2013 or affectnet)
+  - Auto-detects dataset type from path (fer2013, ck, or affectnet)
   - FER2013 now correctly uses 6 classes (disgust excluded)
 
 - **Fixed channel mismatch error in FER2013 training**
   - All FER2013 transforms now output 1-channel grayscale (matching EmotionClassifier)
   - Fixed `get_fer2013_augmentation_transforms()` to use correct normalization
+
+### New Features
+- **Added CK+ (Cohn-Kanade) dataset support**
+  - Download: `kaggle datasets download zhiguocui/ck-dataset`
+  - Balances to 400 samples per class (via augmentation)
+  - 6 emotion classes (contempt/disgust excluded)
+  - Auto-detected from path containing "ck"
 
 ---
 

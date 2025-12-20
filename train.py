@@ -20,18 +20,27 @@ def train_emotion(args):
         data_lower = args.data.lower()
         if 'fer' in data_lower or 'fer2013' in data_lower:
             dataset = 'fer2013'
+        elif 'ck' in data_lower:
+            dataset = 'ck'
         else:
             dataset = 'affectnet'
     
+    # Auto-set output directory based on dataset if using default
+    output_dir = args.output
+    if args.output == 'models/emotion_trained':
+        output_dir = f'models/emotion_{dataset}'
+    
     print(f"Training emotion classifier on {dataset}")
     print(f"Data directory: {args.data}")
-    print(f"Output directory: {args.output}")
+    print(f"Output directory: {output_dir}")
     if args.balance:
-        print(f"Balanced training: {args.target_samples} samples per class")
+        # Dataset-specific defaults
+        samples = args.target_samples or (400 if dataset == 'ck' else 5000)
+        print(f"Balanced training: {samples} samples per class")
     
     history = train_emotion_model(
         data_dir=args.data,
-        output_dir=args.output,
+        output_dir=output_dir,
         dataset=dataset,
         epochs=args.epochs,
         batch_size=args.batch_size,
@@ -188,7 +197,7 @@ def main():
     emotion_parser.add_argument('--output', type=str, default='models/emotion_trained',
                                 help='Output directory')
     emotion_parser.add_argument('--dataset', type=str, default='auto',
-                                choices=['affectnet', 'fer2013', 'auto'],
+                                choices=['affectnet', 'fer2013', 'ck', 'auto'],
                                 help='Dataset type (auto-detected from path by default)')
     # Optimize for RTX GPU
     if torch.cuda.is_available():
@@ -202,9 +211,9 @@ def main():
     emotion_parser.add_argument('--cpu', action='store_true', help='Force CPU training')
     emotion_parser.add_argument('--balance', action='store_true',
                                 help='Balance classes via oversampling (5000 samples/class by default)')
-    emotion_parser.add_argument('--target-samples', type=int, default=5000,
+    emotion_parser.add_argument('--target-samples', type=int, default=None,
                                 dest='target_samples',
-                                help='Target samples per class when --balance is used')
+                                help='Target samples per class (CK=400, FER2013/AffectNet=5000)')
     emotion_parser.add_argument('--aggressive', action='store_true',
                                 help='Use aggressive augmentation (recommended with --balance)')
     emotion_parser.set_defaults(func=train_emotion)
