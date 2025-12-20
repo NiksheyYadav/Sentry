@@ -1,288 +1,192 @@
-
 # Command Reference
 
-This document provides a comprehensive list of all command-line interface (CLI) commands for the Sentry framework.
+Complete list of all CLI commands and options.
 
-## Main Application (`main.py`)
+---
 
-The main entry point for running the real-time assessment system.
+## Table of Contents
 
-### Basic Usage
+1. [Demo & Inference](#1-demo--inference)
+2. [Training Commands](#2-training-commands)
+3. [Dataset Management](#3-dataset-management)
+4. [Evaluation](#4-evaluation)
+
+---
+
+## 1. Demo & Inference
+
+### Run Webcam Demo
 
 ```bash
 python main.py --demo
 ```
 
-### Arguments
+### Run on Video File
 
-| Argument | Type | Default | Description |
-|----------|------|---------|-------------|
-| `--demo` | Flag | `False` | Run in demo mode with real-time visualization. |
-| `--benchmark` | Flag | `False` | Run performance benchmark mode (no visualization). |
-| `--duration` | Int | `60` | Duration in seconds for benchmark mode. |
-| `--camera` | Int | `0` | Camera device ID (0=default, 1=external). |
-| `--cpu` | Flag | `False` | Force CPU mode even if GPU is available. |
-| `--config` | Path | `None` | Path to custom YAML configuration file. |
-| `--trained-model` | Path | `None` | Path to a trained `.pth` emotion model checkpoint. |
-
-### Examples
-
-**Run with external camera:**
 ```bash
-python main.py --demo --camera 1
+python main.py --video path/to/video.mp4
 ```
 
-**Use a custom trained model:**
+### With Custom Model
+
 ```bash
 python main.py --demo --trained-model models/emotion_trained/best_model.pth
 ```
 
-**Run a 30-second benchmark on CPU:**
-```bash
-python main.py --benchmark --duration 30 --cpu
-```
+### Main.py Options
 
-**Use high-performance configuration (recommended for RTX GPUs):**
-```bash
-python main.py --demo --config configs/performance_config.yaml
-```
-
----
-
-## Training Utilities (`train.py`)
-
-Utilities for training models, evaluating performance, and managing datasets.
-
-### Available Commands
-
-| Command | Description |
-|---------|-------------|
-| `emotion` | Train facial emotion classifier |
-| `posture` | Train posture temporal model |
-| `classifier` | Train mental health classifier heads |
-| `evaluate` | Evaluate trained model performance |
-| `download` | Show dataset download instructions |
-| `create-session` | Create data collection session template |
+| Option | Description |
+|--------|-------------|
+| `--demo` | Run webcam demo |
+| `--video PATH` | Process video file |
+| `--trained-model PATH` | Use custom trained model |
+| `--camera ID` | Camera device ID (default: 0) |
+| `--no-gpu` | Force CPU mode |
 
 ---
 
-### 1. Train Emotion Model
+## 2. Training Commands
 
-Fine-tune the facial emotion classifier on AffectNet or FER2013.
+### Train Emotion Model
 
 ```bash
-python train.py emotion --data data/affectnet --epochs 40
+# Basic
+python train.py emotion --data data/fer2013 --epochs 40
+
+# Balanced (recommended)
+python train.py emotion --data data/fer2013 --epochs 40 --balance --aggressive
+
+# Custom settings
+python train.py emotion --data data/fer2013 --epochs 30 --batch-size 32 --balance --target-samples 3000
 ```
 
-| Argument | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `--data` | Yes | - | Path to dataset directory (e.g., `data/affectnet`). |
-| `--dataset` | No | `affectnet` | Dataset type (`affectnet` or `fer2013`). |
-| `--output` | No | `models/emotion_trained` | Directory to save trained models. |
-| `--epochs` | No | `20` | Number of training epochs. |
-| `--batch-size` | No | `64` | Training batch size. |
-| `--lr` | No | `1e-4` | Learning rate. |
-| `--workers` | No | `4` | Number of data loading workers. |
-| `--cpu` | No | Flag | Force CPU training. |
+#### Emotion Options
 
-**Features:**
-- DenseNet121 backbone with transfer learning
-- Label smoothing (0.15) and weight decay (0.05)
-- Strong data augmentation (ColorJitter, GaussianBlur, RandomErasing)
-- Early stopping after 7 epochs without improvement
-- Class weighting for imbalanced data
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--data` | (required) | Path to dataset |
+| `--output` | `models/emotion_trained` | Output directory |
+| `--dataset` | auto | `affectnet`, `fer2013`, or `auto` |
+| `--epochs` | 20 | Training epochs |
+| `--batch-size` | 64 | Batch size |
+| `--lr` | 0.0001 | Learning rate |
+| `--workers` | 4 | Data loading workers |
+| `--balance` | - | Balance classes (oversample minorities) |
+| `--target-samples` | 5000 | Samples per class when balanced |
+| `--aggressive` | - | Extra strong augmentation |
+| `--cpu` | - | Force CPU training |
 
 ---
 
-### 2. Train Posture Model
-
-Train the TCN-LSTM temporal model for body language and stress detection.
+### Train Posture Model
 
 ```bash
+# Basic
 python train.py posture --data data/posture --epochs 50
+
+# Custom settings
+python train.py posture --data data/posture --epochs 100 --batch-size 16 --seq-length 60
 ```
 
-| Argument | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `--data` | Yes | - | Path to posture dataset directory. |
-| `--output` | No | `models/posture_trained` | Directory to save trained models. |
-| `--epochs` | No | `50` | Number of training epochs. |
-| `--batch-size` | No | `32` | Training batch size. |
-| `--lr` | No | `1e-4` | Learning rate. |
-| `--seq-length` | No | `30` | Sequence length in frames. |
-| `--workers` | No | `4` | Number of data loading workers. |
-| `--cpu` | No | Flag | Force CPU training. |
+#### Posture Options
 
-**Multi-Task Learning:**
-- Posture classification: upright, slouched, open, closed
-- Stress indicators: calm, fidgeting, restless, excessive_stillness
-- Trajectory prediction: stable, deteriorating, improving
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--data` | (required) | Path to dataset |
+| `--output` | `models/posture_trained` | Output directory |
+| `--epochs` | 50 | Training epochs |
+| `--batch-size` | 32 | Batch size |
+| `--lr` | 0.0001 | Learning rate |
+| `--seq-length` | 30 | Frames per sequence |
+| `--workers` | 4 | Data loading workers |
+| `--cpu` | - | Force CPU training |
 
 ---
 
-### 3. Train Classifier Heads
-
-Train custom mental health classifier heads on extracted features.
+### Train Classifier Heads
 
 ```bash
 python train.py classifier --features path/to/features --labels path/to/labels.json
 ```
 
-| Argument | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `--features` | Yes | - | Path to extracted feature directory. |
-| `--labels` | Yes | - | Path to labels JSON file. |
-| `--output` | No | `models/classifier_trained` | Output directory. |
-| `--epochs` | No | `50` | Training epochs. |
-| `--batch-size` | No | `64` | Batch size. |
-| `--lr` | No | `1e-3` | Learning rate. |
-| `--cpu` | No | Flag | Force CPU training. |
+#### Classifier Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--features` | (required) | Path to feature files |
+| `--labels` | (required) | Path to labels JSON |
+| `--output` | `models/classifier_trained` | Output directory |
+| `--epochs` | 50 | Training epochs |
+| `--batch-size` | 64 | Batch size |
+| `--lr` | 0.001 | Learning rate |
+| `--cpu` | - | Force CPU training |
 
 ---
 
-### 4. Evaluate Model
+## 3. Dataset Management
 
-Generate metrics, confusion matrices, and training plots.
-
-```bash
-python train.py evaluate --model models/emotion_trained/best_model.pth --data data/affectnet
-```
-
-| Argument | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `--model` | Yes | - | Path to `.pth` model checkpoint. |
-| `--data` | Yes | - | Path to validation dataset. |
-| `--output` | No | `evaluation_results` | Directory for results. |
-| `--cpu` | No | Flag | Force CPU evaluation. |
-
-**Output Files:**
-- `confusion_matrix.png` - Per-class accuracy visualization
-- `training_curves.png` - Loss and accuracy over epochs
-- `metrics.json` - Precision, recall, F1 per class
-
----
-
-### 5. Dataset Download Instructions
-
-Show download and preparation instructions for datasets.
+### Show Download Instructions
 
 ```bash
-python train.py download --dataset <name>
-```
-
-| Dataset | Description |
-|---------|-------------|
-| `affectnet` | Facial emotion dataset (7 classes) |
-| `fer2013` | Facial expression dataset (7 classes) |
-| `posture` | Body language datasets (BoLD, MultiPosture, etc.) |
-
-**Examples:**
-```bash
+python train.py download --dataset fer2013
 python train.py download --dataset affectnet
 python train.py download --dataset posture
 ```
 
----
-
-## Video Posture Dataset Downloads (`scripts/download_video_posture_datasets.py`)
-
-Download and preprocess video posture datasets for body language and mental state training.
-
-### Basic Usage
+### Download Posture Datasets
 
 ```bash
-python scripts/download_video_posture_datasets.py --dataset all
-```
-
-### Arguments
-
-| Argument | Type | Default | Description |
-|----------|------|---------|-------------|
-| `--dataset` | Choice | `all` | Dataset to download: `all`, `multiposture`, `figshare`, `ntu_skeleton`, `cmu_panoptic` |
-| `--data-dir` | Path | `data/posture` | Output directory for downloaded data |
-| `--list` | Flag | - | List all available datasets |
-| `--setup-only` | Flag | - | Only setup toolbox (for CMU Panoptic) |
-
-### Available Datasets
-
-| Dataset | Size | Access Type | Description |
-|---------|------|-------------|-------------|
-| `multiposture` | ~5MB | Direct download | Body keypoints with posture labels |
-| `figshare` | ~10MB | Direct download | 50K OpenPose sit/stand keypoints |
-| `ntu_skeleton` | ~5.8GB | Google Drive | 25-joint skeleton, 60 action classes |
-| `cmu_panoptic` | Variable | Toolbox | Multi-view 3D body pose |
-
-### Examples
-
-```bash
-# List all available datasets
+# List available datasets
 python scripts/download_video_posture_datasets.py --list
 
-# Download all directly accessible datasets
+# Download all
 python scripts/download_video_posture_datasets.py --dataset all
 
-# Download specific dataset
+# Download specific
+python scripts/download_video_posture_datasets.py --dataset multiposture
 python scripts/download_video_posture_datasets.py --dataset figshare
-
-# Download NTU RGB+D skeleton data
 python scripts/download_video_posture_datasets.py --dataset ntu_skeleton
-
-# Setup CMU Panoptic toolbox
-python scripts/download_video_posture_datasets.py --dataset cmu_panoptic --setup-only
-
-# Specify custom output directory
-python scripts/download_video_posture_datasets.py --dataset all --data-dir data/video_posture
 ```
 
-### Output Format
-
-All datasets are preprocessed to Sentry's training format:
-```
-data/posture/
-├── train/
-│   ├── sequences/*.npy
-│   └── labels.json
-├── val/
-│   ├── sequences/*.npy
-│   └── labels.json
-├── mean.npy
-└── std.npy
-```
-
-### 6. Create Session Template
-
-Create a folder structure for recording custom video sessions.
+### Create Data Collection Session
 
 ```bash
-python train.py create-session --output data/sessions/user_01 --duration 60
+python train.py create-session --output sessions/my_session --duration 120
 ```
 
-| Argument | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `--output` | Yes | - | Session output directory. |
-| `--duration` | No | `60` | Expected video duration in seconds. |
+---
+
+## 4. Evaluation
+
+### Evaluate Trained Model
+
+```bash
+python train.py evaluate --model models/emotion_trained/best_model.pth --data data/fer2013
+```
+
+#### Evaluation Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--model` | (required) | Path to model checkpoint |
+| `--data` | (required) | Path to evaluation dataset |
+| `--output` | `evaluation_results` | Output directory |
+| `--cpu` | - | Force CPU evaluation |
+
+**Outputs:**
+- `confusion_matrix.png` - Per-class accuracy visualization
+- `training_curves.png` - Loss and accuracy over epochs
+- `per_class_metrics.json` - Precision, recall, F1 per class
 
 ---
 
 ## Quick Reference
 
-```bash
-# Run demo
-python main.py --demo
-
-# Train emotion model
-python train.py emotion --data data/affectnet --epochs 40
-
-# Train posture model  
-python train.py posture --data data/posture --epochs 50
-
-# Evaluate model
-python train.py evaluate --model models/emotion_trained/best_model.pth --data data/affectnet
-
-# Get dataset info
-python train.py download --dataset posture
-
-# Download video posture datasets
-python scripts/download_video_posture_datasets.py --dataset all
-```
-
+| Task | Command |
+|------|---------|
+| Webcam demo | `python main.py --demo` |
+| Process video | `python main.py --video video.mp4` |
+| Train emotion (balanced) | `python train.py emotion --data data/fer2013 --balance --aggressive` |
+| Train posture | `python train.py posture --data data/posture --epochs 50` |
+| Evaluate model | `python train.py evaluate --model path/to/model.pth --data data/fer2013` |
+| Download datasets | `python scripts/download_video_posture_datasets.py --dataset all` |

@@ -1,34 +1,56 @@
-# Sentry Documentation
+# 📚 Sentry Documentation
 
-Welcome to the Sentry documentation.
+Welcome to the Sentry documentation. Start here to learn how to use the framework.
 
-## Core Guides
+---
 
-- **[Getting Started](GETTING_STARTED.md)**
-  - Installation guide
-  - Setting up the prerequisite models
-  - Running the demo
+## Quick Links
 
-- **[Training Guide](TRAINING.md)**
-  - Dataset preparation (AffectNet/FER2013)
-  - Training the emotion classifier
-  - Evaluating model performance
+| I want to... | Go to... |
+|--------------|----------|
+| **Get started quickly** | [Getting Started](GETTING_STARTED.md) |
+| **Train models** | [Training Guide](TRAINING.md) |
+| **See all commands** | [Command Reference](COMMANDS.md) |
+| **Understand the AI** | [Theory & Research](THEORY.md) |
+| **Learn the architecture** | [System Architecture](ARCHITECTURE.md) |
+| **Optimize performance** | [Performance Guide](PERFORMANCE.md) |
 
-- **[System Architecture](ARCHITECTURE.md)**
-  - Understanding the pipeline
-  - Fusion network details
-  - Heuristic vs Neural prediction
+---
 
-- **[Command Reference](COMMANDS.md)**
-  - Full list of CLI arguments for `main.py`
-  - Training and utility commands for `train.py`
+## Documentation Overview
 
-## API Reference
+### [Getting Started](GETTING_STARTED.md)
+Installation, prerequisites, and running your first demo.
 
-The source code is organized into the following modules:
+### [Training Guide](TRAINING.md)
+Complete guide to training emotion and posture models, including:
+- Dataset download and preparation
+- All training options and flags
+- Balanced training for imbalanced classes
+- Troubleshooting common issues
 
-- `src.video`: Video capture and buffering
-- `src.facial`: Face detection and expression analysis
-- `src.posture`: Body pose estimation and feature extraction
-- `src.fusion`: Multimodal data fusion
-- `src.prediction`: Mental health assessment logic
+### [Command Reference](COMMANDS.md)
+Every CLI command with all options in easy-to-read tables.
+
+### [Theory & Research](THEORY.md)
+Deep dive into the research behind Sentry:
+- Multimodal emotion recognition
+- Facial expression analysis (MTCNN, DenseNet)
+- Posture analysis (MediaPipe, TCN-LSTM)
+- Clinical correlations with mental health
+
+### [System Architecture](ARCHITECTURE.md)
+Technical details of the system design:
+- Pipeline overview
+- Model architectures
+- Fusion mechanism
+- Prediction heads
+
+### [Performance Guide](PERFORMANCE.md)
+Optimization tips for different hardware configurations.
+
+---
+
+## Version History
+
+See [Changelog](recent_changes_updates_byversion.md) for version history and recent updates.

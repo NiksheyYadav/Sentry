@@ -1,71 +1,233 @@
 # System Architecture
 
-Sentry is a multimodal mental health assessment framework that fuses facial and posture analysis.
+Technical overview of Sentry's multimodal mental health assessment pipeline.
 
-## Core Pipeline
+---
 
-### 1. Video Acquisition
-- **Capture**: 30 FPS via OpenCV
-- **Buffering**: Circular buffer maintains recent history
-- **Frame Management**: `src/video/`
+## Table of Contents
 
-### 2. Facial Analysis (`src/facial/`)
-- **Detection**: MTCNN (Multi-task Cascaded Convolutional Networks)
-- **Emotion Recognition**: DenseNet121 (Pre-trained/Fine-tuned)
-- **Action Units**: Detection of specific facial muscle movements
-- **Temporal Aggregation**: Rolling window analysis of emotion stability
+1. [Pipeline Overview](#1-pipeline-overview)
+2. [Facial Analysis](#2-facial-analysis)
+3. [Posture Analysis](#3-posture-analysis)
+4. [Fusion Engine](#4-fusion-engine)
+5. [Prediction Heads](#5-prediction-heads)
+6. [File Structure](#6-file-structure)
 
-### 3. Posture Analysis (`src/posture/`)
-- **Pose Estimation**: MediaPipe Pose (Tasks API)
-- **Feature Extraction**: 
-  - **Geometric**: Spine curvature, head tilt, shoulder symmetry
-  - **Movement**: Fidgeting, restlessness, total kinetic energy
-- **Temporal Model**: TCN (Temporal Convolutional Network) + LSTM for embedding extraction
+---
 
-### 4. Fusion Engine (`src/fusion/`)
-- **Cross-Attention**: Bidirectional attention mechanism matches facial cues with body language
-- **Feature Fusion**: Concatenates weighted features into a 1024D vector
-- **Dynamic Weighting**: Assigns importance scores to each modality
+## 1. Pipeline Overview
 
-### 5. Prediction & Assessment (`src/prediction/`)
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    VIDEO INPUT (30 FPS)                     │
+└─────────────────────────────────────────────────────────────┘
+                              │
+              ┌───────────────┴───────────────┐
+              ▼                               ▼
+┌─────────────────────────┐     ┌─────────────────────────┐
+│     FACIAL BRANCH       │     │     POSTURE BRANCH      │
+├─────────────────────────┤     ├─────────────────────────┤
+│ 1. MTCNN Face Detection │     │ 1. MediaPipe Pose       │
+│ 2. Grayscale Conversion │     │ 2. Feature Extraction   │
+│ 3. DenseNet121 Backbone │     │    (15 features)        │
+│ 4. Emotion Classification│    │ 3. TCN Encoder          │
+│ 5. 512D Embedding       │     │ 4. LSTM Temporal        │
+└─────────────────────────┘     │ 5. 512D Embedding       │
+              │                 └─────────────────────────┘
+              │                               │
+              └───────────────┬───────────────┘
+                              ▼
+              ┌─────────────────────────────────┐
+              │       FUSION ENGINE             │
+              ├─────────────────────────────────┤
+              │ • Cross-Attention (8 heads)     │
+              │ • Feature Concatenation         │
+              │ • 1024D Fused Embedding         │
+              └─────────────────────────────────┘
+                              │
+                              ▼
+              ┌─────────────────────────────────┐
+              │     MENTAL HEALTH CLASSIFIER    │
+              ├─────────────────────────────────┤
+              │ Shared Backbone (512D)          │
+              │         │                       │
+              │    ┌────┴────┬────┬────┬────┐   │
+              │    ▼    ▼    ▼    ▼    ▼    ▼   │
+              │ Stress Dep. Anx. Post.Stress Traj│
+              └─────────────────────────────────┘
+```
 
-#### Multi-Head Neural Classifier
-Six-headed classifier operating on fused features (1024D):
+---
 
-| Head | Classes | Description |
-|------|---------|-------------|
-| **Stress** | Low, Moderate, High | Overall stress level |
-| **Depression** | Minimal, Mild, Moderate, Severe | Depressive indicators |
-| **Anxiety** | Minimal, Mild, Moderate, Severe | Anxiety indicators |
-| **Posture Archetype** | Upright, Slouched, Open, Closed | Body language state |
-| **Stress Indicator** | Calm, Fidgeting, Restless, Stillness | Movement patterns |
-| **Trajectory** | Stable, Deteriorating, Improving | Temporal trend |
+## 2. Facial Analysis
 
-#### Heuristic Predictor (Fallback)
-- Supports Monte Carlo Dropout for uncertainty estimation (Bayesian approximation)
+### Face Detection: MTCNN
 
-## File Structure
+Multi-task Cascaded Convolutional Networks for robust face detection.
 
-- `main.py`: Entry point and pipeline orchestration
-- `train.py`: Training and evaluation CLI
-- `src/config.py`: Centralized configuration using dataclasses
-- `src/utils/`: Helper utilities (model loading, math)
+| Stage | Purpose |
+|-------|---------|
+| P-Net | Proposal generation |
+| R-Net | Refine bounding boxes |
+| O-Net | Final detection + landmarks |
 
-## Data Flow
+### Emotion Classification: DenseNet121
 
-```mermaid
-graph LR
-    Camera --> Video[Video Capture]
-    Video --> Face[Face Detection]
-    Video --> Pose[Pose Estimation]
+**Architecture:**
+- Backbone: DenseNet121 (pre-trained on ImageNet)
+- Modified: First conv layer accepts 1-channel grayscale
+- Output: 6-class emotion + 512D embedding
+
+**Input:** 224×224 grayscale image  
+**Output:** `(emotion_logits, embedding)`
+
+**Source:** `src/facial/emotion.py`
+
+---
+
+## 3. Posture Analysis
+
+### Pose Estimation: MediaPipe
+
+Extracts 33 body landmarks in real-time.
+
+### Feature Extraction
+
+From landmarks, we compute **15 features**:
+
+| Category | Features |
+|----------|----------|
+| **Geometric** | Spine curvature, head tilt, shoulder slope |
+| **Angular** | Arm angles, shoulder asymmetry |
+| **Velocity** | Movement speed, acceleration |
+| **Derived** | Kinetic energy, stillness duration |
+
+**Source:** `src/posture/features.py`
+
+### Temporal Model: TCN-LSTM
+
+```
+Input: (batch, 30 frames, 15 features)
+           │
+           ▼
+    ┌──────────────┐
+    │ TCN Encoder  │  Dilated convolutions
+    │ 64→128→256   │  Multi-scale patterns
+    └──────────────┘
+           │
+           ▼
+    ┌──────────────┐
+    │    LSTM      │  Temporal dependencies
+    │ Hidden: 128  │  State: improving/deteriorating
+    └──────────────┘
+           │
+           ▼
+    ┌──────────────┐
+    │  Projection  │
+    │    512D      │
+    └──────────────┘
+```
+
+**Source:** `src/posture/temporal_model.py`
+
+---
+
+## 4. Fusion Engine
+
+### Cross-Attention Mechanism
+
+Allows each modality to attend to relevant parts of the other.
+
+```python
+# Facial features attend to posture
+Q = FacialEmb @ W_query  
+K = PostureEmb @ W_key
+V = PostureEmb @ W_value
+Attention = softmax(Q @ K.T / sqrt(d)) @ V
+```
+
+**Configuration:**
+- Attention heads: 8
+- Facial embed dim: 512
+- Posture embed dim: 512
+- Fused dim: 1024
+
+**Source:** `src/fusion/fusion.py`
+
+---
+
+## 5. Prediction Heads
+
+The classifier has **6 prediction heads** operating on the 1024D fused embedding:
+
+| Head | Classes | Purpose |
+|------|---------|---------|
+| **Stress** | low, moderate, high | Overall stress level |
+| **Depression** | minimal, mild, moderate, severe | Depression indicators |
+| **Anxiety** | minimal, mild, moderate, severe | Anxiety indicators |
+| **Posture** | upright, slouched, open, closed | Body language state |
+| **Stress Indicator** | calm, fidgeting, restless, stillness | Movement patterns |
+| **Trajectory** | stable, deteriorating, improving | Temporal trend |
+
+**Uncertainty Estimation:**
+- Monte Carlo Dropout (10 samples)
+- Temperature scaling (1.5)
+
+**Source:** `src/prediction/classifier.py`
+
+---
+
+## 6. File Structure
+
+```
+src/
+├── config.py                 # All configuration dataclasses
+│
+├── facial/
+│   ├── emotion.py            # EmotionClassifier (DenseNet121)
+│   └── detector.py           # MTCNN wrapper
+│
+├── posture/
+│   ├── pose_estimator.py     # MediaPipe wrapper
+│   ├── features.py           # Feature extraction
+│   └── temporal_model.py     # TCN-LSTM model
+│
+├── fusion/
+│   └── fusion.py             # Cross-attention fusion
+│
+├── prediction/
+│   ├── classifier.py         # 6-head mental health classifier
+│   └── heuristic.py          # Rule-based fallback
+│
+├── video/
+│   └── capture.py            # Video capture utilities
+│
+└── visualization/
+    └── dashboard.py          # Real-time visualization
+```
+
+---
+
+## Configuration
+
+All model parameters are configured in `src/config.py`:
+
+```python
+@dataclass
+class FacialConfig:
+    emotion_classes: List[str]  # 6 emotions
+    embedding_dim: int = 1280
     
-    Face --> Emotion[Emotion Classifier]
-    Pose --> Features[Posture Features]
+@dataclass
+class PostureConfig:
+    input_dim: int = 15         # 15 posture features
+    tcn_channels: List[int] = [64, 128, 256]
+    lstm_hidden_size: int = 128
     
-    Emotion --> Fusion
-    Features --> Fusion
-    
-    Fusion --> Predictor[Heuristic/Neural Predictor]
-    Predictor --> Alert[Alert System]
-    Predictor --> UI[Visualization]
+@dataclass
+class FusionConfig:
+    facial_embed_dim: int = 512
+    posture_embed_dim: int = 512
+    fused_dim: int = 1024
+    attention_heads: int = 8
 ```

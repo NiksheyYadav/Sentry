@@ -1,113 +1,197 @@
-# Getting Started with Sentry
+# Getting Started
 
-## Prerequisites
+Step-by-step guide to set up and run Sentry.
 
-- Python 3.8+
-- Webcam
-- CUDA-compatible GPU (recommended for real-time performance)
-- 4GB+ RAM
+---
 
-## 1. Installation
+## Table of Contents
 
-Clone the repository and install dependencies:
+1. [Prerequisites](#1-prerequisites)
+2. [Installation](#2-installation)
+3. [Download Datasets](#3-download-datasets)
+4. [Run Demo](#4-run-demo)
+5. [Train Models](#5-train-models)
+6. [Next Steps](#6-next-steps)
+
+---
+
+## 1. Prerequisites
+
+### Required
+
+- **Python 3.8+** (3.10 recommended)
+- **pip** package manager
+
+### Recommended
+
+- **CUDA GPU** (NVIDIA) for real-time processing
+- **Webcam** for live demo
+- **Kaggle account** for dataset downloads
+
+---
+
+## 2. Installation
+
+### Step 1: Clone Repository
 
 ```bash
-git clone https://github.com/yourusername/sentry.git
+git clone https://github.com/your-repo/sentry.git
 cd sentry
+```
 
-# Create virtual environment (optional but recommended)
+### Step 2: Create Virtual Environment (Recommended)
+
+```bash
 python -m venv venv
-# Windows:
-venv\Scripts\activate
-# Linux/Mac:
-source venv/bin/activate
 
-# Install requirements
+# Windows
+venv\Scripts\activate
+
+# Linux/Mac
+source venv/bin/activate
+```
+
+### Step 3: Install Dependencies
+
+```bash
 pip install -r requirements.txt
 ```
 
-## 2. Setup Models
+### Step 4: Verify Installation
 
-The system requires MediaPipe task models.
+```bash
+python -c "import torch; print(f'PyTorch: {torch.__version__}, CUDA: {torch.cuda.is_available()}')"
+```
 
-1. Create a `models/` directory:
-   ```bash
-   mkdir models
-   ```
+Expected output:
+```
+PyTorch: 2.x.x, CUDA: True
+```
 
-2. Download the Pose Landmarker model:
-   - download `pose_landmarker_heavy.task` from [Google MediaPipe Models](https://developers.google.com/mediapipe/solutions/vision/pose_landmarker#models)
-   - Rename it to `pose_landmarker.task`
-   - Place it in `c:\sentry\models\`
+---
 
-## 3. Running the Demo
+## 3. Download Datasets
 
-Start the real-time monitoring dashboard:
+### Emotion Dataset (FER2013)
+
+```bash
+# Option 1: Kaggle CLI
+kaggle datasets download -d msambare/fer2013
+unzip fer2013.zip -d data/fer2013/
+
+# Option 2: Manual
+# Go to https://www.kaggle.com/datasets/msambare/fer2013
+# Download and extract to data/fer2013/
+```
+
+### Posture Datasets
+
+```bash
+python scripts/download_video_posture_datasets.py --dataset all
+```
+
+---
+
+## 4. Run Demo
+
+### Webcam Demo
 
 ```bash
 python main.py --demo
 ```
 
-### Controls
+**Controls:**
+- `Q` - Quit
+- `S` - Screenshot
+- `R` - Reset tracking
 
-- **Q**: Quit application
-- **R**: Reset temporal state (clears history)
-
-### Troubleshooting
-
-- **Low FPS**: 
-  - Use the performance config: `python main.py --demo --config configs/performance_config.yaml`
-  - Ensure GPU is being used (check console output for "MediaPipe GPU delegate enabled")
-  - Adjust `frame_skip` in config (higher = faster but less frequent updates)
-  - Reduce model complexity in `PostureConfig.model_complexity` (0=fastest)
-- **"No detection"**: Ensure your face is well-lit and visible.
-
-## 4. Performance Optimization
-
-For maximum performance on GPU systems (RTX series recommended):
+### Process Video File
 
 ```bash
-python main.py --demo --config configs/performance_config.yaml
+python main.py --video path/to/video.mp4
 ```
 
-This configuration enables:
-- **GPU Delegate**: Hardware acceleration for MediaPipe pose estimation
-- **Frame Skipping**: Process every 2nd frame for 2x speed boost
-- **Lite Model**: Faster pose detection with minimal accuracy loss
-- **Mixed Precision**: FP16 inference for faster neural network processing
-
-### Manual Configuration
-
-You can customize the system via `src/config.py` or by passing a YAML file:
+### With Trained Model
 
 ```bash
-python main.py --demo --config my_config.yaml
+python main.py --demo --trained-model models/emotion_trained/best_model.pth
 ```
 
-Example `my_config.yaml`:
-```yaml
-video:
-  camera_id: 1        # Use external webcam
-  process_fps: 30     # Processing speed
-  frame_skip: 2       # Process every 2nd frame (1=all frames, 2=half, 3=third)
-  
-posture:
-  model_complexity: 0           # 0=lite (fastest), 1=full, 2=heavy
-  enable_gpu_delegate: true     # Enable GPU acceleration
-  min_detection_confidence: 0.3 # Lower = faster detection
-  
-prediction:
-  high_severity_threshold: 0.8
+---
 
-device: cuda          # Use GPU
-use_fp16: true        # Mixed precision inference
+## 5. Train Models
+
+### Quick Start - Emotion Model
+
+```bash
+# Download dataset first
+kaggle datasets download -d msambare/fer2013
+unzip fer2013.zip -d data/fer2013/
+
+# Train with balanced classes
+python train.py emotion --data data/fer2013 --epochs 40 --balance --aggressive
 ```
 
-### Performance Tuning Guide
+This will:
+- Load FER2013 dataset (6 emotion classes)
+- Balance to 5000 samples per class
+- Apply strong augmentation
+- Train for 40 epochs
+- Save best model to `models/emotion_trained/`
 
-| Setting | Impact | Recommendation |
-|---------|--------|----------------|
-| `frame_skip` | Higher = faster FPS, less frequent updates | 1-2 for real-time, 3-4 for slower systems |
-| `model_complexity` | 0=fastest, 2=most accurate | 0 for RTX GPUs, 1 for high-end systems |
-| `enable_gpu_delegate` | Enables GPU acceleration | Always `true` if GPU available |
-| `min_detection_confidence` | Lower = faster detection | 0.3 for speed, 0.5 for accuracy |
+### Check Training Progress
+
+The training will show:
+```
+FER2013 train Loaded: 28273 total - {'angry': 3995, 'fear': 4097, ...}
+Balancing to 5000 samples per class...
+FER2013 train Balanced: 30000 total - {'angry': 5000, 'fear': 5000, ...}
+
+Epoch 1: 100%|██████| 468/468 [02:30<00:00] loss=1.45 acc=35.2
+Epoch 2: 100%|██████| 468/468 [02:28<00:00] loss=1.12 acc=52.1
+...
+```
+
+---
+
+## 6. Next Steps
+
+| Goal | Documentation |
+|------|---------------|
+| Train better models | [TRAINING.md](TRAINING.md) |
+| Understand the AI | [THEORY.md](THEORY.md) |
+| All commands | [COMMANDS.md](COMMANDS.md) |
+| System architecture | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Optimize performance | [PERFORMANCE.md](PERFORMANCE.md) |
+
+---
+
+## Troubleshooting
+
+### "CUDA not available"
+
+1. Install NVIDIA drivers
+2. Install CUDA-enabled PyTorch:
+```bash
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+```
+
+### "MediaPipe error"
+
+```bash
+pip install --upgrade mediapipe
+```
+
+### "No webcam found"
+
+```bash
+# Try different camera ID
+python main.py --demo --camera 1
+```
+
+### "Out of GPU memory"
+
+```bash
+# Reduce batch size
+python train.py emotion --data data/fer2013 --batch-size 32
+```

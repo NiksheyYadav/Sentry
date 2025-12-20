@@ -1,165 +1,199 @@
 # Training Guide
 
-Sentry allows you to train models for emotion recognition, posture analysis, and mental health classification.
-
-## Overview
-
-| Model Type | Purpose | Dataset | Command |
-|------------|---------|---------|---------|
-| **Emotion** | Facial emotion recognition | AffectNet, FER2013 | `python train.py emotion` |
-| **Posture** | Body language & stress detection | BoLD, MultiPosture | `python train.py posture` |
-| **Classifier** | Mental health heads | Custom features | `python train.py classifier` |
+Complete guide for training emotion recognition, posture analysis, and mental health prediction models.
 
 ---
 
-## 1. Emotion Model Training
+## Table of Contents
 
-Fine-tune the DenseNet121 backbone for 6-class emotion recognition (neutral, happy, sad, surprise, fear, anger).
+1. [Quick Start](#1-quick-start)
+2. [Emotion Model Training](#2-emotion-model-training)
+3. [Posture Model Training](#3-posture-model-training)
+4. [Evaluation](#4-evaluation)
+5. [Using Trained Models](#5-using-trained-models)
+6. [Troubleshooting](#6-troubleshooting)
+
+---
+
+## 1. Quick Start
+
+### Train Emotion Model (Recommended)
+
+```bash
+# FER2013 with balanced classes (5000 samples each, 6 classes)
+python train.py emotion --data data/fer2013 --epochs 40 --balance --aggressive
+```
+
+### Train Posture Model
+
+```bash
+python train.py posture --data data/posture --epochs 50
+```
+
+---
+
+## 2. Emotion Model Training
+
+The emotion model uses **DenseNet121** to classify 6 emotions from grayscale face images.
+
+### Classes
+
+| Index | Emotion | Description |
+|-------|---------|-------------|
+| 0 | Neutral | Baseline state |
+| 1 | Happy | Positive affect |
+| 2 | Sad | Sadness indicators (correlated with depression) |
+| 3 | Surprise | Unexpected events |
+| 4 | Fear | Anxiety marker |
+| 5 | Anger | Stress indicator |
+
+> **Note**: 'Disgust' is automatically excluded from FER2013 (poorly labeled, rarely useful).
+
+---
 
 ### Datasets
 
-**AffectNet** (Recommended):
+#### FER2013 (Recommended for Quick Training)
+
+```bash
+# Download from Kaggle
+kaggle datasets download -d msambare/fer2013
+
+# Extract
+unzip fer2013.zip -d data/fer2013/
+```
+
+**Structure:**
+```
+data/fer2013/
+├── train/
+│   ├── angry/
+│   ├── fear/
+│   ├── happy/
+│   ├── neutral/
+│   ├── sad/
+│   └── surprise/
+└── test/
+    └── (same structure)
+```
+
+#### AffectNet (Larger, More Diverse)
+
 ```bash
 kaggle datasets download -d mstjebashazida/affectnet
-# Supports: folder structure OR labels.csv file
 ```
 
-**FER2013** (6 classes - disgust excluded):
-```bash
-kaggle datasets download -d msambare/fer2013
-# Automatically excludes 'disgust' class for balanced training
-```
-
-> [!TIP]
-> FER2013 now automatically excludes the 'disgust' class (poorly labeled, rarely useful) and remaps to 6 emotion classes matching AffectNet.
-
-### Training Command
-
-```bash
-python train.py emotion --data data/affectnet --epochs 40 --batch-size 64
-```
-
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--data` | Required | Path to dataset directory |
-| `--dataset` | `affectnet` | Dataset type (`affectnet` or `fer2013`) |
-| `--output` | `models/emotion_trained` | Output directory |
-| `--epochs` | `20` | Training epochs |
-| `--batch-size` | `64` | Batch size |
-| `--lr` | `1e-4` | Learning rate |
-| `--workers` | `4` | Data loading workers |
-| `--cpu` | Flag | Force CPU training |
-
-### Anti-Overfitting Features
-
-The emotion trainer includes several regularization techniques:
-- **Label smoothing**: 0.15 (reduces overconfidence)
-- **Weight decay**: 0.05 (L2 regularization)
-- **Dropout**: 0.4-0.5 in classifier heads
-- **Data augmentation**: ColorJitter, RandomErasing, GaussianBlur, Perspective
-- **Early stopping**: Stops after 7 epochs without improvement
-
-### Balanced Training (for Underrepresented Classes)
-
-Emotion datasets are typically imbalanced (e.g., "happy" is over-represented, "sad" is rare). Use balanced training to improve accuracy on minority classes:
-
-```bash
-# Balanced training with oversampling (recommended for sad/neutral improvement)
-python -m training.trainers.emotion_trainer \
-    --data data/affectnet \
-    --balance \
-    --epochs 30
-
-# Balanced training with aggressive augmentation (best results)
-python -m training.trainers.emotion_trainer \
-    --data data/affectnet \
-    --balance \
-    --aggressive \
-    --epochs 30
-
-# Custom target samples per class
-python -m training.trainers.emotion_trainer \
-    --data data/affectnet \
-    --balance \
-    --target-samples 5000 \
-    --aggressive
-```
-
-| Argument | Description |
-|----------|-------------|
-| `--balance` | Oversample minority classes to match the majority class |
-| `--target-samples` | Target samples per class (default: match majority) |
-| `--aggressive` | Use extra-strong augmentation for oversampled data |
-
-> [!TIP]
-> Balanced training significantly improves accuracy on "sad" and "neutral" emotions, which are often underrepresented in AffectNet.
+**Supports multiple formats:**
+- Folder structure: `train/0/`, `train/1/`, etc.
+- CSV format: `labels.csv` with columns `image,label` or `subDirectory,image,expression`
 
 ---
 
-## 2. Posture Model Training
+### Training Commands
 
-Train the TCN-LSTM temporal model for body language analysis.
+#### Basic Training
 
-### Multi-Task Learning
+```bash
+python train.py emotion --data data/fer2013 --epochs 40
+```
 
-The posture model learns three tasks simultaneously:
+#### Balanced Training (Recommended)
+
+Class imbalance is common (e.g., "happy" is 7000+ samples, "surprise" is 3000). Use `--balance` to equalize:
+
+```bash
+# Balance to 5000 samples per class with strong augmentation
+python train.py emotion --data data/fer2013 --epochs 40 --balance --aggressive
+```
+
+**What `--balance` does:**
+- Oversamples minority classes (fear, surprise, angry)
+- Undersamples majority classes (happy)
+- Creates equal 5000 samples per class
+
+**What `--aggressive` does:**
+- Stronger rotation (±30°)
+- More color jitter
+- Heavier random erasing
+- Better for oversampled data diversity
+
+#### Custom Samples Per Class
+
+```bash
+python train.py emotion --data data/fer2013 --balance --target-samples 3000
+```
+
+---
+
+### All Training Arguments
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--data` | (required) | Path to dataset directory |
+| `--output` | `models/emotion_trained` | Where to save trained model |
+| `--dataset` | auto | `affectnet`, `fer2013`, or `auto` (auto-detected from path) |
+| `--epochs` | 20 | Number of training epochs |
+| `--batch-size` | 64 | Batch size |
+| `--lr` | 0.0001 | Learning rate |
+| `--workers` | 4 | Data loading workers |
+| `--balance` | False | Balance classes via oversampling |
+| `--target-samples` | 5000 | Samples per class when `--balance` is used |
+| `--aggressive` | False | Extra strong augmentation |
+| `--cpu` | False | Force CPU training |
+
+---
+
+### Anti-Overfitting Features
+
+The training automatically applies:
+
+| Technique | Value | Purpose |
+|-----------|-------|---------|
+| Label Smoothing | 0.15 | Reduces overconfidence |
+| Weight Decay | 0.05 | L2 regularization |
+| Dropout | 0.4-0.5 | In classifier layers |
+| Data Augmentation | Various | Rotation, color jitter, erasing |
+| Early Stopping | 7 epochs | Stops if no improvement |
+
+---
+
+## 3. Posture Model Training
+
+The posture model uses **TCN-LSTM** for temporal body language analysis.
+
+### Classes (Multi-Task)
 
 | Task | Classes | Description |
 |------|---------|-------------|
 | **Posture** | upright, slouched, open, closed | Body language state |
-| **Stress** | calm, fidgeting, restless, stillness | Stress indicators |
+| **Stress** | calm, fidgeting, restless, stillness | Movement patterns |
 | **Trajectory** | stable, deteriorating, improving | Temporal trends |
 
-### Recommended Datasets
+---
 
-**Quick Download (Recommended):**
+### Dataset Download
+
 ```bash
-# Download all directly accessible datasets
+# Download all available posture datasets
 python scripts/download_video_posture_datasets.py --dataset all
 
-# List available datasets
-python scripts/download_video_posture_datasets.py --list
+# Or specific datasets
+python scripts/download_video_posture_datasets.py --dataset multiposture
+python scripts/download_video_posture_datasets.py --dataset figshare
 ```
 
-**Available Datasets:**
+### Dataset Format
 
-| Dataset | Size | Access | Command |
-|---------|------|--------|---------|
-| **MultiPosture** | ~5MB | Direct | `--dataset multiposture` |
-| **Figshare Sit/Stand** | ~10MB | Direct | `--dataset figshare` |
-| **NTU RGB+D Skeleton** | ~5.8GB | Google Drive | `--dataset ntu_skeleton` |
-| **CMU Panoptic** | Variable | Toolbox | `--dataset cmu_panoptic` |
-
-**Dataset Details:**
-
-| Dataset | Best For | Description |
-|---------|----------|-------------|
-| **MultiPosture** | Sitting posture | Upper/lower body posture labels |
-| **Figshare** | Sit/stand | 50K OpenPose keypoints |
-| **NTU RGB+D** | Action recognition | 60-120 action classes with skeleton |
-| **CMU Panoptic** | 3D body pose | Multi-view social interactions |
-
-**Additional Datasets (Manual Download):**
-
-| Dataset | Link |
-|---------|------|
-| **BoLD** | https://cydar.ist.psu.edu/emotionchallenge/ |
-| **DAiSEE** | https://people.iith.ac.in/vineethnb/resources/daisee/ |
-| **MPII Pose** | http://human-pose.mpi-inf.mpg.de/ |
-
-### Data Preparation
-
-Structure your data as:
 ```
 data/posture/
-+-- train/
-|   +-- sequences/
-|   |   +-- seq_001.npy  # Shape: (T, 15)
-|   |   +-- seq_002.npy
-|   +-- labels.json
-+-- val/
-    +-- sequences/
-    +-- labels.json
+├── train/
+│   ├── sequences/
+│   │   ├── seq_001.npy  # Shape: (T, 15) - T frames, 15 features
+│   │   └── seq_002.npy
+│   └── labels.json
+└── val/
+    ├── sequences/
+    └── labels.json
 ```
 
 **labels.json format:**
@@ -170,10 +204,7 @@ data/posture/
 }
 ```
 
-**Label encoding:**
-- Posture: 0=upright, 1=slouched, 2=open, 3=closed
-- Stress: 0=calm, 1=fidgeting, 2=restless, 3=excessive_stillness
-- Trajectory: 0=stable, 1=deteriorating, 2=improving
+---
 
 ### Training Command
 
@@ -181,105 +212,105 @@ data/posture/
 python train.py posture --data data/posture --epochs 50 --batch-size 32
 ```
 
+### All Posture Arguments
+
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `--data` | Required | Path to posture dataset |
+| `--data` | (required) | Path to posture dataset |
 | `--output` | `models/posture_trained` | Output directory |
-| `--epochs` | `50` | Training epochs |
-| `--batch-size` | `32` | Batch size |
-| `--lr` | `1e-4` | Learning rate |
-| `--seq-length` | `30` | Sequence length (frames) |
-| `--workers` | `4` | Data loading workers |
-| `--cpu` | Flag | Force CPU training |
-
-### Feature Extraction
-
-To convert videos to feature sequences:
-
-```python
-from src.posture.pose_estimator import PoseEstimator
-from src.posture.features import PostureFeatureExtractor
-import numpy as np
-import cv2
-
-estimator = PoseEstimator()
-extractor = PostureFeatureExtractor()
-
-cap = cv2.VideoCapture("video.mp4")
-features = []
-
-while cap.isOpened():
-    ret, frame = cap.read()
-    if not ret:
-        break
-    
-    pose_result = estimator.process_frame(frame)
-    if pose_result:
-        feature_vector = extractor.get_feature_vector(pose_result)
-        features.append(feature_vector)
-
-np.save("seq_001.npy", np.array(features))
-```
+| `--epochs` | 50 | Training epochs |
+| `--batch-size` | 32 | Batch size |
+| `--lr` | 0.0001 | Learning rate |
+| `--seq-length` | 30 | Frames per sequence |
+| `--workers` | 4 | Data loading workers |
+| `--cpu` | False | Force CPU training |
 
 ---
 
-## 3. Classifier Head Training
-
-Train custom mental health classifier heads on extracted features.
-
-```bash
-python train.py classifier --features path/to/features --labels path/to/labels.json
-```
-
----
-
-## 4. Model Evaluation
+## 4. Evaluation
 
 Generate confusion matrices, training curves, and per-class metrics:
 
 ```bash
-python train.py evaluate --model models/emotion_trained/best_model.pth --data data/affectnet
+python train.py evaluate --model models/emotion_trained/best_model.pth --data data/fer2013
 ```
 
-Results are saved in `evaluation_results/`.
+Results are saved to `evaluation_results/` including:
+- `confusion_matrix.png`
+- `training_curves.png`
+- `per_class_metrics.json`
 
 ---
 
 ## 5. Using Trained Models
 
-### Emotion Model
+### In Demo
+
 ```bash
 python main.py --demo --trained-model models/emotion_trained/best_model.pth
 ```
 
-### Loading in Code
+### In Code
+
 ```python
 from src.facial.emotion import EmotionClassifier
+from src.config import FacialConfig
 import torch
 
-model = EmotionClassifier()
-checkpoint = torch.load("models/emotion_trained/best_model.pth")
+# Load model
+config = FacialConfig(emotion_classes=['neutral', 'happy', 'sad', 'surprise', 'fear', 'anger'])
+model = EmotionClassifier(config)
+
+checkpoint = torch.load('models/emotion_trained/best_model.pth')
 model.load_state_dict(checkpoint['model_state_dict'])
+model.eval()
+
+# Predict
+result = model.predict(face_image)  # RGB image
+print(f"Emotion: {result.emotion}, Confidence: {result.confidence:.2f}")
 ```
 
 ---
 
-## 6. Training Tips
+## 6. Troubleshooting
 
-### Reducing Overfitting
-1. Use larger datasets (AffectNet > FER2013)
-2. Enable early stopping (`--epochs 40` with built-in early stopping)
-3. Use data augmentation (enabled by default)
-4. Lower learning rate for fine-tuning
+### Out of Memory
 
-### GPU Optimization
 ```bash
-# For RTX GPUs, TF32 is automatically enabled
-python train.py emotion --data data/affectnet --batch-size 64 --workers 4
+# Reduce batch size
+python train.py emotion --data data/fer2013 --batch-size 32
 ```
 
-### Memory Issues
-If you run out of GPU memory:
+### Slow Training
+
 ```bash
-python train.py emotion --data data/affectnet --batch-size 32
+# Increase workers, use GPU
+python train.py emotion --data data/fer2013 --workers 8
 ```
+
+### Overfitting
+
+Use balanced training with aggressive augmentation:
+```bash
+python train.py emotion --data data/fer2013 --balance --aggressive --epochs 30
+```
+
+### Channel Mismatch Error
+
+The model expects 1-channel grayscale input. Make sure your dataset loader outputs grayscale images with `mean=[0.5], std=[0.5]` normalization.
+
+### "No samples found"
+
+Check your data directory structure matches the expected format (see Dataset sections above).
+
+---
+
+## Summary
+
+| Task | Command |
+|------|---------|
+| **Train Emotion (Balanced)** | `python train.py emotion --data data/fer2013 --epochs 40 --balance --aggressive` |
+| **Train Emotion (AffectNet)** | `python train.py emotion --data data/affectnet --epochs 40 --balance` |
+| **Train Posture** | `python train.py posture --data data/posture --epochs 50` |
+| **Evaluate** | `python train.py evaluate --model path/to/model.pth --data data/fer2013` |
+| **Use in Demo** | `python main.py --demo --trained-model path/to/model.pth` |
