@@ -210,13 +210,10 @@ class AlertSystem:
                 prediction.overall_severity, now
             ))
         
-        # Depression alert
-        if prediction.depression_level in ['moderate', 'severe']:
-            severity_score = 0.7 if prediction.depression_level == 'moderate' else 1.0
-            alerts.append(self._create_alert(
-                'depression', prediction.depression_confidence,
-                severity_score, now
-            ))
+        # Neutral check (no active alert for neutral usually, but we check levels)
+        if prediction.neutral_level == 'low' and prediction.overall_severity > 0.6:
+            # If neutral is low and overall severities are high, it's already covered by stress/anxiety
+            pass
         
         # Anxiety alert
         if prediction.anxiety_level in ['moderate', 'severe']:
@@ -289,10 +286,10 @@ class AlertSystem:
                 "Review workload and time management",
                 "Connect with support resources if needed"
             ],
-            'depression': [
-                "Recommend speaking with a counselor",
-                "Encourage social connection",
-                "Monitor for persistent patterns"
+            'neutral': [
+                "Maintain current positive activities",
+                "Practice regular wellness checks",
+                "Ensure balanced work-rest schedule"
             ],
             'anxiety': [
                 "Provide grounding techniques",

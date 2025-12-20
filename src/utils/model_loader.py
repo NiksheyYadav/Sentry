@@ -38,7 +38,7 @@ def load_trained_emotion_model(
     model = EmotionClassifier(config)
     
     # Load weights
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     
     # Handle different checkpoint formats
     if 'model_state_dict' in checkpoint:
@@ -64,7 +64,7 @@ def get_training_info(checkpoint_path: str) -> dict:
     Returns:
         Dictionary with training info
     """
-    checkpoint = torch.load(checkpoint_path, map_location='cpu')
+    checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
     
     info = {
         'epoch': checkpoint.get('epoch', 'unknown'),

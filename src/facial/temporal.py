@@ -167,6 +167,44 @@ class FacialTemporalAggregator:
             flat_affect_duration=flat_affect_duration
         )
     
+    def get_stable_emotion(self) -> str:
+        """
+        Get the stable emotion using hysteresis and temporal voting.
+        
+        Prevents rapid flickering between emotions by requiring persistent
+        evidence to change states.
+        
+        Returns:
+            Stable emotion label.
+        """
+        if len(self._emotion_buffer) < 5:
+            return self._last_dominant_emotion or 'neutral'
+            
+        # Count emotions in the last 1 second (10 frames)
+        recent = list(self._emotion_buffer)[-10:]
+        recent_dominants = [max(p, key=p.get) for p in recent]
+        
+        counts = {}
+        for emo in recent_dominants:
+            counts[emo] = counts.get(emo, 0) + 1
+            
+        # Get the winner of the vote
+        voted_emotion = max(counts, key=counts.get)
+        vote_count = counts[voted_emotion]
+        
+        # Hysteresis: Only switch if the new emotion is strong (e.g., > 60% of window)
+        # and different from current stable state.
+        current_stable = self._last_dominant_emotion or 'neutral'
+        
+        if voted_emotion != current_stable:
+            # High threshold for switching away from Happy to Anger/Fear
+            threshold = 7 if current_stable == 'happy' else 5
+            if vote_count >= threshold:
+                self._last_dominant_emotion = voted_emotion
+                return voted_emotion
+                
+        return current_stable
+
     def get_feature_vector(self) -> Optional[np.ndarray]:
         """
         Get flattened feature vector for fusion.

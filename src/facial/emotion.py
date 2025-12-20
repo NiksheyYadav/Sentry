@@ -171,12 +171,36 @@ class EmotionClassifier(nn.Module):
             for i, emotion in enumerate(self.config.emotion_classes)
         }
         
+        # Refine probabilities to reduce noise/confusion
+        prob_dict = self._refine_probabilities(prob_dict)
+        
+        # Update prediction based on refined probabilities
+        pred_emotion = max(prob_dict, key=prob_dict.get)
+        confidence = prob_dict[pred_emotion]
+        
         return EmotionResult(
-            emotion=self.config.emotion_classes[pred_idx],
-            confidence=float(probs_np[pred_idx]),
+            emotion=pred_emotion,
+            confidence=confidence,
             probabilities=prob_dict,
             embedding=embedding.cpu().numpy()[0]
         )
+    
+    def _refine_probabilities(self, probs: Dict[str, float]) -> Dict[str, float]:
+        """Refine probabilities to reduce noise and cross-category confusion."""
+        refined = probs.copy()
+        
+        # If Happy is dominant, suppress Anger and Fear which are common noise targets
+        if refined.get('happy', 0) > 0.5:
+            suppression_factor = 0.2
+            for emo in ['anger', 'fear']:
+                if emo in refined:
+                    refined[emo] *= suppression_factor
+            
+            # Normalize again
+            total = sum(refined.values())
+            refined = {k: v / total for k, v in refined.items()}
+            
+        return refined
     
     def predict_batch(self, face_images: List[np.ndarray]) -> List[EmotionResult]:
         """

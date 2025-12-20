@@ -249,13 +249,13 @@ class RealtimeMonitor:
                                       prediction.stress_confidence)
             y += 25
             
-            # Depression
-            dep_color = self._get_severity_color(prediction.depression_level,
-                                                  ['minimal', 'mild', 'moderate', 'severe'])
-            cv2.putText(canvas, f"Depression: {prediction.depression_level}", (x, y),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, dep_color, 1)
+            # Neutral
+            neu_color = self._get_severity_color(prediction.neutral_level,
+                                                  ['low', 'normal', 'high'], reverse=True)
+            cv2.putText(canvas, f"Neutral: {prediction.neutral_level}", (x, y),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, neu_color, 1)
             self._draw_confidence_bar(canvas, x + 150, y - 10,
-                                      prediction.depression_confidence)
+                                      prediction.neutral_confidence)
             y += 25
             
             # Anxiety
@@ -367,11 +367,14 @@ class RealtimeMonitor:
         cv2.putText(canvas, "MONITORING ACTIVE", (x + 25, y + 15),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.COLORS['danger'], 1)
     
-    def _get_severity_color(self, level: str, levels: List[str]) -> Tuple[int, int, int]:
+    def _get_severity_color(self, level: str, levels: List[str], reverse: bool = False) -> Tuple[int, int, int]:
         """Get color based on severity level."""
         try:
             idx = levels.index(level)
             ratio = idx / (len(levels) - 1)
+            
+            if reverse:
+                ratio = 1.0 - ratio
             
             if ratio <= 0.33:
                 return self.COLORS['secondary']

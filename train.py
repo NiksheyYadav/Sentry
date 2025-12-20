@@ -146,7 +146,7 @@ def evaluate_model(args):
     print(f"Output directory: {args.output}")
     
     # Detect model type from checkpoint
-    checkpoint = torch.load(args.model, map_location='cpu')
+    checkpoint = torch.load(args.model, map_location='cpu', weights_only=False)
     state_dict_keys = list(checkpoint.get('model_state_dict', checkpoint).keys())
     
     # Check if it's a posture model (has TCN/LSTM layers) or emotion model (has backbone)

@@ -199,11 +199,15 @@ class MentalHealthPipeline:
                 timestamp=timestamp
             )
             
+            # Get stabilized emotion
+            stable_emotion = self.facial_temporal.get_stable_emotion()
+            
             facial_embedding = emotion.embedding
-            self._last_emotion = emotion.emotion
+            self._last_emotion = stable_emotion
             self._last_emotion_probs = emotion.probabilities
-            result['info']['emotion'] = emotion.emotion
-            result['emotion_result'] = emotion  # Pass full object for visualization
+            result['info']['emotion'] = stable_emotion
+            result['emotion_result'] = emotion  # Pass full object but updated label
+            result['emotion_result'].emotion = stable_emotion
         
         # Posture analysis
         posture_embedding = None
@@ -232,24 +236,34 @@ class MentalHealthPipeline:
                 posture_embedding = temporal_result.pattern_embedding
                 result['info']['posture'] = f"{geo_features.spine_curvature:.1f}"
         
-        # Use heuristic predictor (emotion-based assessment)
-        prediction = self.heuristic_predictor.predict(
-            emotion=self._last_emotion,
-            emotion_probs=self._last_emotion_probs,
-            posture_score=posture_score,
-            movement_score=movement_score
-        )
+        # Fusion and Prediction
+        prediction = None
+        if facial_embedding is not None and posture_embedding is not None:
+            # Full Multimodal Fusion
+            fused = self.fusion_network.fuse(facial_embedding, posture_embedding)
+            prediction = self.classifier.predict(
+                fused.embedding, 
+                emotion_hint=self._last_emotion
+            )
+            
+            result['info']['facial_weight'] = f"{fused.facial_contribution:.2f}"
+            result['info']['posture_weight'] = f"{fused.posture_contribution:.2f}"
+            result['info']['prediction_type'] = 'Fusion'
+        else:
+            # Fallback to heuristic
+            prediction = self.heuristic_predictor.predict(
+                emotion=self._last_emotion,
+                emotion_probs=self._last_emotion_probs,
+                posture_score=posture_score,
+                movement_score=movement_score
+            )
+            result['info']['prediction_type'] = 'Heuristic'
+            
         result['prediction'] = prediction
         
         # Check for alerts
         alert = self.alert_system.evaluate(prediction)
         result['alert'] = alert
-        
-        # Fusion info (if both modalities available)
-        if facial_embedding is not None and posture_embedding is not None:
-            fused = self.fusion_network.fuse(facial_embedding, posture_embedding)
-            result['info']['facial_weight'] = f"{fused.facial_contribution:.2f}"
-            result['info']['posture_weight'] = f"{fused.posture_contribution:.2f}"
         
         return result
     

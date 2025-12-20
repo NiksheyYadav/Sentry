@@ -70,8 +70,8 @@ class PredictionConfig:
     """Prediction and alert configuration."""
     # Mental health levels
     stress_levels: List[str] = field(default_factory=lambda: ['low', 'moderate', 'high'])
-    depression_levels: List[str] = field(default_factory=lambda: [
-        'minimal', 'mild', 'moderate', 'severe'
+    neutral_levels: List[str] = field(default_factory=lambda: [
+        'low', 'normal', 'high'
     ])
     anxiety_levels: List[str] = field(default_factory=lambda: [
         'minimal', 'mild', 'moderate', 'severe'

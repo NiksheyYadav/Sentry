@@ -331,7 +331,7 @@ def create_temporal_model(config: Optional[PostureConfig] = None,
     if checkpoint_path and os.path.exists(checkpoint_path):
         # Load checkpoint and extract input dimension
         try:
-            checkpoint = torch.load(checkpoint_path, map_location=device)
+            checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
             state_dict = checkpoint.get('model_state_dict', checkpoint)
             
             # Extract input_dim from first conv layer

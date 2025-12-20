@@ -19,10 +19,10 @@ class MentalHealthPrediction:
     stress_confidence: float
     stress_probabilities: Dict[str, float]
     
-    # Depression assessment
-    depression_level: str
-    depression_confidence: float
-    depression_probabilities: Dict[str, float]
+    # Neutral assessment
+    neutral_level: str
+    neutral_confidence: float
+    neutral_probabilities: Dict[str, float]
     
     # Anxiety assessment
     anxiety_level: str
@@ -105,8 +105,8 @@ class MentalHealthClassifier(nn.Module):
         self.stress_head = ClassificationHead(
             512, len(self.pred_config.stress_levels)
         )
-        self.depression_head = ClassificationHead(
-            512, len(self.pred_config.depression_levels)
+        self.neutral_head = ClassificationHead(
+            512, len(self.pred_config.neutral_levels)
         )
         self.anxiety_head = ClassificationHead(
             512, len(self.pred_config.anxiety_levels)
@@ -163,7 +163,7 @@ class MentalHealthClassifier(nn.Module):
         
         # Mental health predictions
         stress_logits = self.stress_head(shared)
-        depression_logits = self.depression_head(shared)
+        neutral_logits = self.neutral_head(shared)
         anxiety_logits = self.anxiety_head(shared)
         
         # Posture-based predictions
@@ -173,7 +173,7 @@ class MentalHealthClassifier(nn.Module):
         
         # Apply temperature scaling
         stress_logits = stress_logits / self.temperature
-        depression_logits = depression_logits / self.temperature
+        neutral_logits = neutral_logits / self.temperature
         anxiety_logits = anxiety_logits / self.temperature
         posture_logits = posture_logits / self.temperature
         stress_ind_logits = stress_ind_logits / self.temperature
@@ -181,7 +181,7 @@ class MentalHealthClassifier(nn.Module):
         
         return {
             'stress': stress_logits,
-            'depression': depression_logits,
+            'neutral': neutral_logits,
             'anxiety': anxiety_logits,
             'posture_archetype': posture_logits,
             'stress_indicator': stress_ind_logits,
@@ -190,7 +190,8 @@ class MentalHealthClassifier(nn.Module):
     
     def predict(self, fused_features: np.ndarray, 
                 use_mc_dropout: bool = False,
-                num_samples: int = 10) -> MentalHealthPrediction:
+                num_samples: int = 10,
+                emotion_hint: Optional[str] = None) -> MentalHealthPrediction:
         """
         Make prediction with optional uncertainty estimation.
         
@@ -198,6 +199,7 @@ class MentalHealthClassifier(nn.Module):
             fused_features: Fused embedding array (1024,).
             use_mc_dropout: Use Monte Carlo dropout for uncertainty.
             num_samples: Number of MC samples.
+            emotion_hint: Optional detected emotion to guide assessment.
             
         Returns:
             MentalHealthPrediction dataclass.
@@ -219,8 +221,8 @@ class MentalHealthClassifier(nn.Module):
             stress_probs = torch.stack([
                 F.softmax(o['stress'], dim=1) for o in all_outputs
             ]).mean(dim=0)
-            depression_probs = torch.stack([
-                F.softmax(o['depression'], dim=1) for o in all_outputs
+            neutral_probs = torch.stack([
+                F.softmax(o['neutral'], dim=1) for o in all_outputs
             ]).mean(dim=0)
             anxiety_probs = torch.stack([
                 F.softmax(o['anxiety'], dim=1) for o in all_outputs
@@ -241,7 +243,7 @@ class MentalHealthClassifier(nn.Module):
             with torch.no_grad():
                 outputs = self.forward(x)
                 stress_probs = F.softmax(outputs['stress'], dim=1)
-                depression_probs = F.softmax(outputs['depression'], dim=1)
+                neutral_probs = F.softmax(outputs['neutral'], dim=1)
                 anxiety_probs = F.softmax(outputs['anxiety'], dim=1)
                 posture_probs = F.softmax(outputs['posture_archetype'], dim=1)
                 stress_ind_probs = F.softmax(outputs['stress_indicator'], dim=1)
@@ -249,15 +251,26 @@ class MentalHealthClassifier(nn.Module):
         
         # Convert to numpy
         stress_probs = stress_probs.cpu().numpy()[0]
-        depression_probs = depression_probs.cpu().numpy()[0]
+        neutral_probs = neutral_probs.cpu().numpy()[0]
         anxiety_probs = anxiety_probs.cpu().numpy()[0]
+        
+        # Apply Heuristic Safety Override
+        if emotion_hint == 'happy':
+            # Force high neutral and low stress/anxiety
+            # Low Stress: [0.9, 0.1, 0.0]
+            # High Neutral: [0.0, 0.1, 0.9]
+            # Low Anxiety: [0.9, 0.1, 0.0, 0.0]
+            stress_probs = np.array([0.9, 0.1, 0.0])
+            neutral_probs = np.array([0.0, 0.1, 0.9])
+            anxiety_probs = np.array([0.9, 0.1, 0.0, 0.0])
+            
         posture_probs = posture_probs.cpu().numpy()[0]
         stress_ind_probs = stress_ind_probs.cpu().numpy()[0]
         trajectory_probs = trajectory_probs.cpu().numpy()[0]
         
         # Build prediction indices
         stress_idx = np.argmax(stress_probs)
-        depression_idx = np.argmax(depression_probs)
+        neutral_idx = np.argmax(neutral_probs)
         anxiety_idx = np.argmax(anxiety_probs)
         posture_idx = np.argmax(posture_probs)
         stress_ind_idx = np.argmax(stress_ind_probs)
@@ -266,7 +279,7 @@ class MentalHealthClassifier(nn.Module):
         # Determine primary concern (mental health only)
         severities = {
             'stress': stress_idx / (len(self.pred_config.stress_levels) - 1),
-            'depression': depression_idx / (len(self.pred_config.depression_levels) - 1),
+            'neutral': neutral_idx / (len(self.pred_config.neutral_levels) - 1),
             'anxiety': anxiety_idx / (len(self.pred_config.anxiety_levels) - 1)
         }
         primary_concern = max(severities, key=severities.get)
@@ -275,7 +288,7 @@ class MentalHealthClassifier(nn.Module):
         # Determine if attention required
         requires_attention = (
             stress_idx >= 2 or 
-            depression_idx >= 2 or 
+            neutral_idx >= 2 or 
             anxiety_idx >= 2
         )
         
@@ -286,11 +299,11 @@ class MentalHealthClassifier(nn.Module):
                 level: float(stress_probs[i])
                 for i, level in enumerate(self.pred_config.stress_levels)
             },
-            depression_level=self.pred_config.depression_levels[depression_idx],
-            depression_confidence=float(depression_probs[depression_idx]),
-            depression_probabilities={
-                level: float(depression_probs[i])
-                for i, level in enumerate(self.pred_config.depression_levels)
+            neutral_level=self.pred_config.neutral_levels[neutral_idx],
+            neutral_confidence=float(neutral_probs[neutral_idx]),
+            neutral_probabilities={
+                level: float(neutral_probs[i])
+                for i, level in enumerate(self.pred_config.neutral_levels)
             },
             anxiety_level=self.pred_config.anxiety_levels[anxiety_idx],
             anxiety_confidence=float(anxiety_probs[anxiety_idx]),

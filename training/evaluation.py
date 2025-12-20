@@ -322,7 +322,7 @@ def evaluate_trained_model(
     config = FacialConfig()
     model = EmotionClassifier(config)
     
-    checkpoint = torch.load(model_path, map_location=device)
+    checkpoint = torch.load(model_path, map_location=device, weights_only=False)
     model.load_state_dict(checkpoint['model_state_dict'])
     
     # Load data
@@ -386,7 +386,7 @@ def evaluate_posture_model(
     
     # Load checkpoint first to get the model's input dimension
     print(f"Loading model from {model_path}")
-    checkpoint = torch.load(model_path, map_location=device)
+    checkpoint = torch.load(model_path, map_location=device, weights_only=False)
     state_dict = checkpoint['model_state_dict']
     
     # Extract input dimension from the first conv layer weights
