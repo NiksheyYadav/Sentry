@@ -20,15 +20,18 @@ Fine-tune the DenseNet121 backbone for 6-class emotion recognition (neutral, hap
 
 **AffectNet** (Recommended):
 ```bash
-# Via Kaggle CLI
 kaggle datasets download -d mstjebashazida/affectnet
-# Extract to data/affectnet/
+# Supports: folder structure OR labels.csv file
 ```
 
-**FER2013**:
+**FER2013** (6 classes - disgust excluded):
 ```bash
-kaggle datasets download -d deadskull7/fer2013
+kaggle datasets download -d msambare/fer2013
+# Automatically excludes 'disgust' class for balanced training
 ```
+
+> [!TIP]
+> FER2013 now automatically excludes the 'disgust' class (poorly labeled, rarely useful) and remaps to 6 emotion classes matching AffectNet.
 
 ### Training Command
 

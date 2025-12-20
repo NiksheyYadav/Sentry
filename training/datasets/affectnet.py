@@ -129,24 +129,66 @@ class AffectNetDataset(Dataset):
                 for img_path in images:
                     samples.append((img_path, label))
         
-        # Structure 2: Images folder with CSV annotations
+        # Structure 2: labels.csv in root directory
+        # Supports formats: image,label OR subDirectory,image,expression
         if not samples:
-            csv_path = self.root_dir / f'{self.split}_labels.csv'
-            if csv_path.exists():
+            # Try various CSV names
+            csv_candidates = [
+                self.root_dir / 'labels.csv',
+                self.root_dir / f'{self.split}_labels.csv',
+                self.root_dir / f'{self.split}.csv'
+            ]
+            
+            csv_path = None
+            for candidate in csv_candidates:
+                if candidate.exists():
+                    csv_path = candidate
+                    break
+            
+            if csv_path:
+                print(f"Loading from CSV: {csv_path}")
                 df = pd.read_csv(csv_path)
+                
+                # Detect CSV format based on columns
+                columns = df.columns.tolist()
+                
                 for _, row in df.iterrows():
-                    img_path = self.root_dir / 'images' / row['image']
-                    orig_label = int(row['label'])
+                    # Format 1: subDirectory,image,expression (AffectNet official)
+                    if 'subDirectory' in columns and 'expression' in columns:
+                        subdir = str(row['subDirectory'])
+                        img_name = row['image'] if 'image' in columns else row.get('face_id', '')
+                        img_path = self.root_dir / self.split / subdir / str(img_name)
+                        if not img_path.suffix:
+                            img_path = img_path.with_suffix('.jpg')
+                        orig_label = int(row['expression'])
                     
+                    # Format 2: image,label (simple format)
+                    elif 'image' in columns and 'label' in columns:
+                        img_name = row['image']
+                        img_path = self.root_dir / 'images' / img_name
+                        if not img_path.exists():
+                            img_path = self.root_dir / img_name
+                        orig_label = int(row['label'])
+                    
+                    # Format 3: pth,label columns
+                    elif 'pth' in columns:
+                        img_path = Path(row['pth'])
+                        if not img_path.is_absolute():
+                            img_path = self.root_dir / img_path
+                        orig_label = int(row.get('label', row.get('expression', -1)))
+                    
+                    else:
+                        continue
+                    
+                    # Remap labels (skip disgust=5, contempt=7)
                     label = -1
                     if orig_label == 5 or orig_label == 7:
                         continue
-                    
-                    if orig_label == 6:
+                    elif orig_label == 6:  # anger -> 5
                         label = 5
                     elif orig_label < 5:
                         label = orig_label
-                        
+                    
                     if label != -1 and img_path.exists():
                         samples.append((img_path, label))
         
