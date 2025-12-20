@@ -377,9 +377,11 @@ def train_emotion_model(
             batch_size=batch_size,
             num_workers=num_workers,
             balance_classes=balance_classes,
-            target_samples_per_class=target_samples_per_class if target_samples_per_class else 5000
+            target_samples_per_class=target_samples_per_class if target_samples_per_class else 5000,
+            train_transform=train_transform,
+            val_transform=val_transform
         )
-        num_classes = 6  # Disgust excluded, remapped to 6 classes
+        num_classes = 6  # Fixed from 7 to match project standard (excluding disgust)
     
     # Create model
     from src.facial.emotion import EmotionClassifier

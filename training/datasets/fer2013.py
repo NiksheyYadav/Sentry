@@ -130,8 +130,8 @@ class FER2013Dataset(Dataset):
         if csv_path.exists() and not samples:
             df = pd.read_csv(csv_path)
             
-            # Filter by split (Training, PublicTest, PrivateTest)
-            usage_map = {'train': 'Training', 'test': 'PublicTest'}
+            # Filter by split (Training, PublicTest, PrivateTest, Val)
+            usage_map = {'train': 'Training', 'test': 'PublicTest', 'val': 'PrivateTest'}
             usage = usage_map.get(self.split, self.split)
             df = df[df['Usage'] == usage]
             
@@ -299,7 +299,9 @@ def create_fer2013_loaders(
     batch_size: int = 32,
     num_workers: int = 4,
     balance_classes: bool = False,
-    target_samples_per_class: int = 5000
+    target_samples_per_class: int = 5000,
+    train_transform: Optional[transforms.Compose] = None,
+    val_transform: Optional[transforms.Compose] = None
 ) -> Tuple[DataLoader, DataLoader]:
     """
     Create train and test data loaders for FER2013.
@@ -310,30 +312,35 @@ def create_fer2013_loaders(
         num_workers: Data loading workers
         balance_classes: If True, balance train set to target_samples_per_class
         target_samples_per_class: Target samples per class when balancing
+        train_transform: Custom training transforms
+        val_transform: Custom validation transforms
     
     Returns:
         Tuple of (train_loader, test_loader)
     """
-    # Use strong augmentation for balanced training
-    if balance_classes:
-        train_transform = get_fer2013_augmentation_transforms()
-    else:
-        train_transform = transforms.Compose([
+    # Use provided transforms or default to balanced/standard
+    if train_transform is None:
+        if balance_classes:
+            train_transform = get_fer2013_augmentation_transforms()
+        else:
+            train_transform = transforms.Compose([
+                transforms.Resize((224, 224)),
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomRotation(10),
+                transforms.Grayscale(num_output_channels=1),  # 1-channel for EmotionClassifier
+                transforms.ToTensor(),
+                transforms.Normalize([0.5], [0.5])
+            ])
+    
+    if val_transform is None:
+        val_transform = transforms.Compose([
             transforms.Resize((224, 224)),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(10),
             transforms.Grayscale(num_output_channels=1),  # 1-channel for EmotionClassifier
             transforms.ToTensor(),
             transforms.Normalize([0.5], [0.5])
         ])
     
-    val_transform = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.Grayscale(num_output_channels=1),  # 1-channel for EmotionClassifier
-        transforms.ToTensor(),
-        transforms.Normalize([0.5], [0.5])
-    ])
-    
+
     train_dataset = FER2013Dataset(
         root_dir, 
         'train', 
@@ -343,11 +350,13 @@ def create_fer2013_loaders(
         exclude_disgust=True
     )
     
-    # Validation set - also balance but with fewer samples
+    # Validation set - prefer 'val' folder if it exists, otherwise 'test'
+    val_split_name = 'val' if (Path(root_dir) / 'val').exists() else 'test'
     val_target = min(target_samples_per_class // 5, 500) if balance_classes else 0
+    
     test_dataset = FER2013Dataset(
         root_dir, 
-        'test', 
+        val_split_name, 
         val_transform,
         balance_classes=balance_classes,
         target_samples_per_class=val_target if balance_classes else 5000,
