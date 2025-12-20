@@ -6,6 +6,8 @@
 
 Welcome to the **Under the Hood** tour! If you've ever wondered *how* Sentry actually knows you're smiling, stressed, or surprised, you're in the right place. We're going to break down the complex AI into simple, bite-sized pieces.
 
+This guide combines our [System Architecture](ARCHITECTURE.md) and [Theoretical Foundation](THEORY.md) into one easy-to-read explanation.
+
 ---
 
 ## 🧠 The Brain: Two AIs Are Better Than One
@@ -28,71 +30,68 @@ graph LR
 
 ---
 
-## 1. Deep Learning: The "Vibe" Checker
+## 🏗️ Architecture Simplified
 
-The core of Sentry is a **DenseNet121** model. Think of this as a super-powerful pattern recognition machine.
+For a deep dive, check out the full [System Architecture](ARCHITECTURE.md). Here is the simple version:
 
-*   **How it learns:** We showed it thousands of photos of people feeling Happy, Sad, Angry, etc.
-*   **How it works:** It breaks down your image into millions of numbers, looking for patterns like shadows around the eyes or the curve of a cheek.
-*   **The Problem:** Sometimes it gets confused by bad lighting. A shadow might look like a frown!
+### 1. The Pipeline
+Think of Sentry as a factory assembly line.
+1.  **Camera** takes a picture (frame).
+2.  **Face Detector** finds your face.
+3.  **Analyzers** (Emotion & Posture) process the image.
+4.  **Fusion Engine** combines the results.
+5.  **Display** shows you the answer.
+
+### 2. Deep Learning: The "Vibe" Checker (DenseNet)
+The core of Sentry is a **DenseNet121** model. It breaks down your image into millions of numbers, looking for patterns like shadows around the eyes or the curve of a cheek.
+
+*   **Input:** Your face image.
+*   **Output:** Probabilities for 6 emotions (Happy, Sad, Angry, Fear, Surprise, Neutral).
+
+### 3. FaceMesh: The Exact Measurer
+To fix mistakes, we use **MediaPipe FaceMesh**. It places **468 tiny dots** on your face in 3D space.
+
+*   **Eye Aspect Ratio (EAR):** Distance between eyelids. (Wide = Surprise/Fear).
+*   **Mouth Curvature:** Corners up = Happy, Corners down = Sad.
 
 ---
 
-## 2. FaceMesh: The Exact Measurer
+## 🔬 The Science (Theory)
 
-To fix the "Vibe Checker's" mistakes, we use **MediaPipe FaceMesh**. This technology places **468 tiny dots** on your face in 3D space.
+Our AI is based on real psychological research. For the full scientific background, read [Theory & Research](THEORY.md).
 
-*   **Eye Aspect Ratio (EAR):** We measure the distance between your upper and lower eyelids.
-    *   *Small distance?* → Eyes closed or blinking.
-    *   *Huge distance?* → **Surprise!** or Fear.
-*   **Mouth Curvature:** We draw a line from the center of your lip to the corners.
-    *   *Corners go UP?* → **Happy** (Smile)
-    *   *Corners go DOWN?* → **Sad** (Frown)
+### why Multimodal?
+A person may mask their emotions through facial expressions but unconsciously display stress through body language. Combining both provides a "truth serum" effect.
 
-### Example: "The Surprise Formula"
+### Clinical Correlations
+We map observable cues to mental states:
 
-How do we know you're surprised? We use math!
+| Observable Cue | Mental Health Correlation |
+|----------------|---------------------------|
+| **Sadness expression** | Depression indicator |
+| **Slouched posture** | Low mood, fatigue |
+| **Fidgeting** | Anxiety marker |
+| **Frozen stillness** | Severe stress/dissociation |
+
+---
+
+## 🧩 How It Comes Together: The "Surprise Formula"
+
+How do we decide if you're surprised? We use a mathematical formula that combines both AIs:
 
 $$ Surprise = (Wide Eyes) + (Open Mouth) + (Raised Eyebrows) $$
 
-If the model says "Neutral" but your mouth is open and eyebrows are up, our logic overrides it and says "No, that's definitely **SURPRISE**!"
+If the Deep Learning model says "Neutral" but your mouth is open and eyebrows are up, our logic overrides it and says "No, that's definitely **SURPRISE**!"
 
 ---
 
-## 3. Temporal Smoothing: The "Shock Absorbers"
+## 📡 Temporal Smoothing: The "Shock Absorbers"
 
-Have you ever seen an AI flick between "Happy" and "Sad" 10 times a second? It's annoying.
-
-To stop this, we use **Temporal Smoothing**. Think of it like the **shock absorbers** on a car.
-
-*   **Raw Output:** Happy -> Happy -> Sad (glitch) -> Happy -> Happy
-*   **Smoothed Output:** Happy -> Happy -> Happy -> Happy -> Happy
-
-We average the predictions over the last 15 frames (about 0.5 seconds). A single "glitch" frame won't be enough to change the emotion. We also use **Hysteresis**, which means the AI is "stubborn" - it won't change its mind unless it's *really* sure the new emotion is real.
+A raw AI output might flick between "Happy" and "Sad" 10 times a second. That's annoying.
+We use **Temporal Smoothing** (averaging over the last 0.5 seconds) to make the results stable and smooth, just like shock absorbers on a car.
 
 ---
 
-## 4. Posture & Body Language
+## 🚀 Ready to Try It?
 
-Sentry isn't just a face reader; it watches your body too!
-
-*   **Shoulder Line:** We draw a line connecting your shoulders.
-    *   *Shoulders hunched up?* → Sign of **Stress** or **Fear**.
-    *   *Shoulders relaxed?* → **Specific Calm**.
-*   **Head Tilt:** We measure the angle of your nose line. A constant tilt might indicate fatigue or confusion.
-
----
-
-## 🚀 Putting It All Together
-
-When you sit in front of Sentry, all of this happens in **milliseconds**:
-
-1.  **Camera** captures a frame.
-2.  **Face Detector** finds your face.
-3.  **DenseNet** guesses the emotion.
-4.  **FaceMesh** measures your eyes and mouth.
-5.  **Logic** combines them and corrects mistakes.
-6.  **Smoother** stabilizes the result.
-7.  **Display** shows you the final, accurate emotion.
-
-This is how Sentry provides **Clinical-Grade Accuracy** in a real-time monitor!
+Now that you know how it works, go [Get Started](GETTING_STARTED.md) and see the AI in action!
