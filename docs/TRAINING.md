@@ -322,6 +322,17 @@ python train.py emotion --data data/fer2013 --balance --aggressive --epochs 30
 
 The model expects 1-channel grayscale input. Make sure your dataset loader outputs grayscale images with `mean=[0.5], std=[0.5]` normalization.
 
+### Low-Light / Webcam Accuracy Issues
+
+If your trained model performs poorly in low-light conditions (common with webcams), the preprocessing now includes automatic lighting normalization:
+
+- **CLAHE** (Contrast Limited Adaptive Histogram Equalization) enhances local contrast
+- **Adaptive gamma correction** brightens dark images automatically
+
+This is applied by default in `EmotionClassifier.preprocess`. If you still experience issues, try:
+1. Improving your lighting conditions
+2. Adjusting `clip_limit` parameter in `LightingNormalization` (higher = more contrast)
+
 ### "No samples found"
 
 Check your data directory structure matches the expected format (see Dataset sections above).

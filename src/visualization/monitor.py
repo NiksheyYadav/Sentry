@@ -345,6 +345,17 @@ class RealtimeMonitor:
                 cv2.putText(canvas, text, (x, y),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, self.COLORS['neutral'], 1)
                 y += 18
+            
+        # Documentation Link (Bottom)
+        y = canvas.shape[0] - 80
+        cv2.line(canvas, (x, y), (x + self.panel_width - 20, y),
+                self.COLORS['neutral'], 1)
+        y += 20
+        cv2.putText(canvas, "Documentation:", (x, y),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, self.COLORS['text'], 1)
+        y += 20
+        cv2.putText(canvas, "niksheyyadav.github.io/Sentry", (x, y),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, self.COLORS['primary'], 1)
     
     def _draw_confidence_bar(self, canvas: np.ndarray, x: int, y: int,
                               confidence: float, width: int = 80, height: int = 10) -> None:

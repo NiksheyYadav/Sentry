@@ -28,7 +28,7 @@ Technical overview of Sentry's multimodal mental health assessment pipeline.
 │     FACIAL BRANCH       │     │     POSTURE BRANCH      │
 ├─────────────────────────┤     ├─────────────────────────┤
 │ 1. MTCNN Face Detection │     │ 1. MediaPipe Pose       │
-│ 2. Grayscale Conversion │     │ 2. Feature Extraction   │
+│ 2. Lighting Normalize   │     │ 2. Feature Extraction   │
 │ 3. DenseNet121 Backbone │     │    (15 features)        │
 │ 4. Emotion Classification│    │ 3. TCN Encoder          │
 │ 5. 512D Embedding       │     │ 4. LSTM Temporal        │
@@ -78,7 +78,13 @@ Multi-task Cascaded Convolutional Networks for robust face detection.
 - Modified: First conv layer accepts 1-channel grayscale
 - Output: 6-class emotion + 512D embedding
 
-**Input:** 224×224 grayscale image  
+**Preprocessing Pipeline:**
+1. Convert to PIL Image
+2. **Lighting Normalization** (CLAHE + adaptive gamma correction for low-light)
+3. Resize to 224×224
+4. Normalize (mean=0.5, std=0.5)
+
+**Input:** 224×224 grayscale image (lighting-normalized)  
 **Output:** `(emotion_logits, embedding)`
 
 **Source:** `src/facial/emotion.py`

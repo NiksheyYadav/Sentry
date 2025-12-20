@@ -4,6 +4,32 @@ Changelog for the Sentry Mental Health Assessment Framework.
 
 ---
 
+## v0.3.2 (2025-12-21)
+
+### Bugfixes
+- **Fixed low-light emotion recognition accuracy**
+  - Added `LightingNormalization` class in `src/facial/emotion.py`
+  - Applies adaptive **gamma correction** for dark images (brightness < 100)
+  - Applies **CLAHE** (Contrast Limited Adaptive Histogram Equalization) for local contrast
+  - Fixes issue where CK+ trained model misclassified emotions in low-light webcam conditions
+
+### New Features
+- **Emotion Post-Processing** (`src/facial/postprocessor.py`)
+  - Added `EmotionPostProcessor` class to correct model predictions in real-world conditions
+  - **Smile Detection**: Uses Haar cascade to detect smiles and override SAD predictions when smiling
+  - **Mouth Curvature Analysis**: Analyzes mouth region to detect smile vs frown
+  - **Temporal Smoothing**: Weighted moving average over 15 frames for stable predictions
+  - **Hysteresis**: Requires 5 consistent frames before switching emotions (prevents flickering)
+  - Automatically integrated into `MentalHealthPipeline`
+
+### Technical Details
+- Lighting: Detects mean image brightness and applies gamma 1.0–1.8 adaptively
+- CLAHE with `clip_limit=3.0` and `tile_grid_size=(8, 8)` for enhanced facial feature contrast
+- Preprocessing now: `ToPILImage → LightingNormalization → Resize → ToTensor → Normalize`
+- Post-processing: `RawPrediction → SmileDetection → TemporalSmoothing → Hysteresis → FinalPrediction`
+
+---
+
 ## v0.3.1 (2025-12-20)
 
 ### Bugfixes
