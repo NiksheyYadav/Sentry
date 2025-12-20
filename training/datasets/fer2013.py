@@ -253,15 +253,22 @@ Using Kaggle CLI:
 Expected structure:
 data/fer2013/
 ├── train/
-│   ├── angry/
-│   ├── fear/
-│   ├── happy/
-│   ├── neutral/
-│   ├── sad/
-│   └── surprise/
+│   ├── angry/ 4000
+│   ├── disgust/ 450
+│   ├── fear/ 4100
+│   ├── happy/ 7215
+│   ├── neutral/ 4965
+│   ├── sad/ 4830
+│   └── surprise/ 3171
+| we will balance the dataset to 5000
 └── test/
-    ├── angry/
-    ...
+    ├── angry/ 950
+    ├── disgust/ 111
+    ├── fear/ 1024
+    ├── happy/ 1774
+    ├── neutral/ 1233
+    ├── sad/ 1247
+    └── surprise/ 831
 
 Note: 'disgust' folder is automatically excluded.
 """
