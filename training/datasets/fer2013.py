@@ -85,16 +85,13 @@ class FER2013Dataset(Dataset):
         if self.balance_classes:
             self.samples = self._balance_samples()
         
-        # Default transform (grayscale to RGB)
+        # Default transform (1-channel grayscale for EmotionClassifier)
         if self.transform is None:
             self.transform = transforms.Compose([
-                transforms.Grayscale(num_output_channels=3),
                 transforms.Resize((224, 224)),
+                transforms.Grayscale(num_output_channels=1),
                 transforms.ToTensor(),
-                transforms.Normalize(
-                    mean=[0.485, 0.456, 0.406],
-                    std=[0.229, 0.224, 0.225]
-                )
+                transforms.Normalize(mean=[0.5], std=[0.5])
             ])
     
     def _load_samples(self) -> List[Tuple[Path, int]]:
@@ -271,18 +268,21 @@ Note: 'disgust' folder is automatically excluded.
 
 
 def get_fer2013_augmentation_transforms() -> transforms.Compose:
-    """Get strong augmentation transforms for balanced FER2013 training."""
+    """Get strong augmentation transforms for balanced FER2013 training.
+    
+    Note: EmotionClassifier expects 1-channel grayscale input.
+    """
     return transforms.Compose([
-        transforms.Grayscale(num_output_channels=3),
         transforms.Resize((256, 256)),
         transforms.RandomCrop(224),
         transforms.RandomHorizontalFlip(p=0.5),
         transforms.RandomRotation(15),
-        transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3),
+        transforms.ColorJitter(brightness=0.3, contrast=0.3),  # No saturation/hue for grayscale
         transforms.RandomAffine(degrees=10, translate=(0.1, 0.1), scale=(0.9, 1.1)),
         transforms.RandomApply([transforms.GaussianBlur(3)], p=0.2),
+        transforms.Grayscale(num_output_channels=1),  # Convert to 1-channel grayscale
         transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+        transforms.Normalize([0.5], [0.5]),  # Single channel normalization
         transforms.RandomErasing(p=0.2)
     ])
 
@@ -312,19 +312,19 @@ def create_fer2013_loaders(
         train_transform = get_fer2013_augmentation_transforms()
     else:
         train_transform = transforms.Compose([
-            transforms.Grayscale(num_output_channels=3),
             transforms.Resize((224, 224)),
             transforms.RandomHorizontalFlip(),
             transforms.RandomRotation(10),
+            transforms.Grayscale(num_output_channels=1),  # 1-channel for EmotionClassifier
             transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+            transforms.Normalize([0.5], [0.5])
         ])
     
     val_transform = transforms.Compose([
-        transforms.Grayscale(num_output_channels=3),
         transforms.Resize((224, 224)),
+        transforms.Grayscale(num_output_channels=1),  # 1-channel for EmotionClassifier
         transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        transforms.Normalize([0.5], [0.5])
     ])
     
     train_dataset = FER2013Dataset(

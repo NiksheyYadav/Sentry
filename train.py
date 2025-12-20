@@ -14,20 +14,33 @@ def train_emotion(args):
     """Train emotion classifier."""
     from training.trainers.emotion_trainer import train_emotion_model
     
-    print(f"Training emotion classifier on {args.dataset}")
+    # Auto-detect dataset type from path if not explicitly set
+    dataset = args.dataset
+    if dataset == 'auto':
+        data_lower = args.data.lower()
+        if 'fer' in data_lower or 'fer2013' in data_lower:
+            dataset = 'fer2013'
+        else:
+            dataset = 'affectnet'
+    
+    print(f"Training emotion classifier on {dataset}")
     print(f"Data directory: {args.data}")
     print(f"Output directory: {args.output}")
+    if args.balance:
+        print(f"Balanced training: {args.target_samples} samples per class")
     
     history = train_emotion_model(
         data_dir=args.data,
         output_dir=args.output,
-        dataset=args.dataset,
+        dataset=dataset,
         epochs=args.epochs,
         batch_size=args.batch_size,
         learning_rate=args.lr,
-
-        device='cuda',
-        num_workers=args.workers
+        device='cuda' if not args.cpu else 'cpu',
+        num_workers=args.workers,
+        balance_classes=args.balance,
+        target_samples_per_class=args.target_samples,
+        use_aggressive_augmentation=args.aggressive
     )
     
     print(f"\nTraining complete!")
@@ -174,8 +187,9 @@ def main():
                                 help='Path to dataset (AffectNet or FER2013)')
     emotion_parser.add_argument('--output', type=str, default='models/emotion_trained',
                                 help='Output directory')
-    emotion_parser.add_argument('--dataset', type=str, default='affectnet',
-                                choices=['affectnet', 'fer2013'])
+    emotion_parser.add_argument('--dataset', type=str, default='auto',
+                                choices=['affectnet', 'fer2013', 'auto'],
+                                help='Dataset type (auto-detected from path by default)')
     # Optimize for RTX GPU
     if torch.cuda.is_available():
         torch.backends.cudnn.benchmark = True
@@ -183,9 +197,16 @@ def main():
     
     emotion_parser.add_argument('--epochs', type=int, default=20)
     emotion_parser.add_argument('--batch-size', type=int, default=64)
-    emotion_parser.add_argument('--lr', type=float, default=1e-4)  # Lower LR for better generalization
+    emotion_parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
     emotion_parser.add_argument('--workers', type=int, default=4, help='Number of data loading workers')
-    emotion_parser.add_argument('--cpu', action='store_true')
+    emotion_parser.add_argument('--cpu', action='store_true', help='Force CPU training')
+    emotion_parser.add_argument('--balance', action='store_true',
+                                help='Balance classes via oversampling (5000 samples/class by default)')
+    emotion_parser.add_argument('--target-samples', type=int, default=5000,
+                                dest='target_samples',
+                                help='Target samples per class when --balance is used')
+    emotion_parser.add_argument('--aggressive', action='store_true',
+                                help='Use aggressive augmentation (recommended with --balance)')
     emotion_parser.set_defaults(func=train_emotion)
     
     # Classifier training

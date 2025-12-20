@@ -371,12 +371,15 @@ def train_emotion_model(
             )
         num_classes = 6
     else:
+        # FER2013 - now uses 6 classes (disgust excluded)
         train_loader, val_loader = create_fer2013_loaders(
             data_dir, 
             batch_size=batch_size,
-            num_workers=num_workers
+            num_workers=num_workers,
+            balance_classes=balance_classes,
+            target_samples_per_class=target_samples_per_class if target_samples_per_class else 5000
         )
-        num_classes = 7
+        num_classes = 6  # Disgust excluded, remapped to 6 classes
     
     # Create model
     from src.facial.emotion import EmotionClassifier

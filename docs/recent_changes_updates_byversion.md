@@ -4,6 +4,20 @@ Changelog for the Sentry Mental Health Assessment Framework.
 
 ---
 
+## v0.3.1 (2025-12-20)
+
+### Bugfixes
+- **Fixed train.py not using balanced training**
+  - Added `--balance`, `--target-samples`, `--aggressive` flags
+  - Auto-detects dataset type from path (fer2013 or affectnet)
+  - FER2013 now correctly uses 6 classes (disgust excluded)
+
+- **Fixed channel mismatch error in FER2013 training**
+  - All FER2013 transforms now output 1-channel grayscale (matching EmotionClassifier)
+  - Fixed `get_fer2013_augmentation_transforms()` to use correct normalization
+
+---
+
 ## v0.3.0 (2025-12-20)
 
 ### Major Changes
