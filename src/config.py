@@ -68,12 +68,23 @@ class FusionConfig:
 @dataclass
 class PredictionConfig:
     """Prediction and alert configuration."""
+    # Mental health levels
     stress_levels: List[str] = field(default_factory=lambda: ['low', 'moderate', 'high'])
     depression_levels: List[str] = field(default_factory=lambda: [
         'minimal', 'mild', 'moderate', 'severe'
     ])
     anxiety_levels: List[str] = field(default_factory=lambda: [
         'minimal', 'mild', 'moderate', 'severe'
+    ])
+    # Posture-based predictions (moved from posture model to post-fusion)
+    posture_archetypes: List[str] = field(default_factory=lambda: [
+        'upright', 'slouched', 'open', 'closed'
+    ])
+    stress_indicators: List[str] = field(default_factory=lambda: [
+        'calm', 'fidgeting', 'restless', 'stillness'
+    ])
+    trajectories: List[str] = field(default_factory=lambda: [
+        'stable', 'deteriorating', 'improving'
     ])
     # Confidence calibration
     temperature: float = 1.5

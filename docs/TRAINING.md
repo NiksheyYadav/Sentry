@@ -56,6 +56,41 @@ The emotion trainer includes several regularization techniques:
 - **Data augmentation**: ColorJitter, RandomErasing, GaussianBlur, Perspective
 - **Early stopping**: Stops after 7 epochs without improvement
 
+### Balanced Training (for Underrepresented Classes)
+
+Emotion datasets are typically imbalanced (e.g., "happy" is over-represented, "sad" is rare). Use balanced training to improve accuracy on minority classes:
+
+```bash
+# Balanced training with oversampling (recommended for sad/neutral improvement)
+python -m training.trainers.emotion_trainer \
+    --data data/affectnet \
+    --balance \
+    --epochs 30
+
+# Balanced training with aggressive augmentation (best results)
+python -m training.trainers.emotion_trainer \
+    --data data/affectnet \
+    --balance \
+    --aggressive \
+    --epochs 30
+
+# Custom target samples per class
+python -m training.trainers.emotion_trainer \
+    --data data/affectnet \
+    --balance \
+    --target-samples 5000 \
+    --aggressive
+```
+
+| Argument | Description |
+|----------|-------------|
+| `--balance` | Oversample minority classes to match the majority class |
+| `--target-samples` | Target samples per class (default: match majority) |
+| `--aggressive` | Use extra-strong augmentation for oversampled data |
+
+> [!TIP]
+> Balanced training significantly improves accuracy on "sad" and "neutral" emotions, which are often underrepresented in AffectNet.
+
 ---
 
 ## 2. Posture Model Training

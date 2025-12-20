@@ -35,16 +35,35 @@ class AffectNetDataset(Dataset):
         split: str = 'train',
         transform: Optional[transforms.Compose] = None,
         num_classes: int = 6,
-        max_samples: Optional[int] = None
+        max_samples: Optional[int] = None,
+        balance_classes: bool = False,
+        target_samples_per_class: Optional[int] = None
     ):
+        """
+        Initialize AffectNet dataset.
+        
+        Args:
+            root_dir: Path to dataset root directory
+            split: 'train' or 'val'
+            transform: Optional image transforms
+            num_classes: Number of emotion classes (6 or 7)
+            max_samples: Max samples per class before balancing
+            balance_classes: If True, oversample minority classes to match majority
+            target_samples_per_class: If set with balance_classes, sample this many per class
+        """
         self.root_dir = Path(root_dir)
         self.split = split
         self.transform = transform
         self.num_classes = num_classes
         self.max_samples = max_samples
+        self.balance_classes = balance_classes
+        self.target_samples_per_class = target_samples_per_class
         
-        # Determine dataset structure
+        # Load and optionally balance samples
         self.samples = self._load_samples()
+        
+        if self.balance_classes and self.split == 'train':
+            self.samples = self._balance_samples()
         
         # Default transform
         if self.transform is None:
@@ -132,7 +151,68 @@ class AffectNetDataset(Dataset):
                         samples.append((img_path, label))
         
         print(f"Loaded {len(samples)} samples for {self.split} split")
+        
+        # Print class distribution
+        if samples:
+            labels = [s[1] for s in samples]
+            counts = np.bincount(labels, minlength=self.num_classes)
+            print(f"  Class distribution: {dict(zip(self.EMOTION_LABELS.values(), counts))}")
+        
         return samples
+    
+    def _balance_samples(self) -> List[Tuple[Path, int]]:
+        """
+        Balance samples by oversampling minority classes.
+        
+        Uses random oversampling to equalize class distribution,
+        particularly helpful for underrepresented emotions like sad and neutral.
+        """
+        import random
+        
+        # Group samples by class
+        class_samples = {i: [] for i in range(self.num_classes)}
+        for sample in self.samples:
+            class_samples[sample[1]].append(sample)
+        
+        # Determine target count per class
+        class_counts = {k: len(v) for k, v in class_samples.items()}
+        max_count = max(class_counts.values())
+        
+        if self.target_samples_per_class:
+            target_count = self.target_samples_per_class
+        else:
+            target_count = max_count
+        
+        print(f"Balancing classes to {target_count} samples each...")
+        print(f"  Original distribution: {class_counts}")
+        
+        # Oversample minority classes
+        balanced_samples = []
+        for label, samples_list in class_samples.items():
+            if len(samples_list) == 0:
+                print(f"  Warning: No samples for class {label} ({self.EMOTION_LABELS.get(label, 'unknown')})")
+                continue
+            
+            if len(samples_list) >= target_count:
+                # Undersample if we have too many
+                balanced_samples.extend(random.sample(samples_list, target_count))
+            else:
+                # Oversample with replacement
+                balanced_samples.extend(samples_list)  # All original samples
+                remaining = target_count - len(samples_list)
+                oversampled = random.choices(samples_list, k=remaining)
+                balanced_samples.extend(oversampled)
+        
+        # Shuffle the balanced samples
+        random.shuffle(balanced_samples)
+        
+        # Print new distribution
+        new_labels = [s[1] for s in balanced_samples]
+        new_counts = np.bincount(new_labels, minlength=self.num_classes)
+        print(f"  Balanced distribution: {dict(zip(self.EMOTION_LABELS.values(), new_counts))}")
+        print(f"  Total samples after balancing: {len(balanced_samples)}")
+        
+        return balanced_samples
 
     def __len__(self) -> int:
         return len(self.samples)

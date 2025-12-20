@@ -11,7 +11,7 @@ Sentry is a multimodal mental health assessment framework that fuses facial and 
 
 ### 2. Facial Analysis (`src/facial/`)
 - **Detection**: MTCNN (Multi-task Cascaded Convolutional Networks)
-- **Emotion Recognition**: MobileNetV3 (Pre-trained/Fine-tuned)
+- **Emotion Recognition**: DenseNet121 (Pre-trained/Fine-tuned)
 - **Action Units**: Detection of specific facial muscle movements
 - **Temporal Aggregation**: Rolling window analysis of emotion stability
 
@@ -20,23 +20,28 @@ Sentry is a multimodal mental health assessment framework that fuses facial and 
 - **Feature Extraction**: 
   - **Geometric**: Spine curvature, head tilt, shoulder symmetry
   - **Movement**: Fidgeting, restlessness, total kinetic energy
-- **Temporal Model**: TCN (Temporal Convolutional Network) + LSTM for pattern recognition
+- **Temporal Model**: TCN (Temporal Convolutional Network) + LSTM for embedding extraction
 
 ### 4. Fusion Engine (`src/fusion/`)
 - **Cross-Attention**: Bidirectional attention mechanism matches facial cues with body language
 - **Feature Fusion**: Concatenates weighted features into a 1024D vector
-- **Dynamic Weighting**: Assigns importance scores to each modality (e.g., if face is occluded, weight posture higher)
+- **Dynamic Weighting**: Assigns importance scores to each modality
 
 ### 5. Prediction & Assessment (`src/prediction/`)
 
-#### Heuristic Predictor (Default)
-Uses clinical correlations to map observable cues to mental health indicators:
-- **Stress**: Correlated with Anger, Fear, high movement
-- **Depression**: Correlated with Sadness, slouched posture, low movement
-- **Anxiety**: Correlated with Fear, Surprise, fidgeting
+#### Multi-Head Neural Classifier
+Six-headed classifier operating on fused features (1024D):
 
-#### Neural Classifier (Trainable)
-- Three-headed perceptron for Stress, Depression, and Anxiety
+| Head | Classes | Description |
+|------|---------|-------------|
+| **Stress** | Low, Moderate, High | Overall stress level |
+| **Depression** | Minimal, Mild, Moderate, Severe | Depressive indicators |
+| **Anxiety** | Minimal, Mild, Moderate, Severe | Anxiety indicators |
+| **Posture Archetype** | Upright, Slouched, Open, Closed | Body language state |
+| **Stress Indicator** | Calm, Fidgeting, Restless, Stillness | Movement patterns |
+| **Trajectory** | Stable, Deteriorating, Improving | Temporal trend |
+
+#### Heuristic Predictor (Fallback)
 - Supports Monte Carlo Dropout for uncertainty estimation (Bayesian approximation)
 
 ## File Structure

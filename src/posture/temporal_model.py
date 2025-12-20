@@ -12,12 +12,14 @@ from ..config import PostureConfig
 
 @dataclass
 class TemporalPostureResult:
-    """Temporal posture analysis result."""
+    """Temporal posture analysis result - embedding only.
+    
+    Note: Trajectory, posture archetype, and stress indicator predictions
+    are now handled by MentalHealthClassifier post-fusion.
+    """
     pattern_embedding: np.ndarray  # 512-dim embedding
-    posture_trajectory: str  # 'stable', 'deteriorating', 'improving'
-    stillness_duration: float  # Consecutive seconds of stillness
-    state_transitions: int  # Number of archetype changes
-    prediction_confidence: float
+    stillness_duration: float  # Consecutive seconds of stillness (heuristic)
+    state_transitions: int  # Number of archetype changes (heuristic)
 
 
 class TemporalConvBlock(nn.Module):
@@ -151,29 +153,8 @@ class PostureTemporalModel(nn.Module):
             nn.LayerNorm(512)
         )
         
-        # Trajectory classifier (stable, deteriorating, improving)
-        self.trajectory_classifier = nn.Sequential(
-            nn.Linear(512, 64),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.3),
-            nn.Linear(64, 3)
-        )
-        
-        # Posture classifier (upright, slouched, open, closed)
-        self.posture_classifier = nn.Sequential(
-            nn.Linear(512, 128),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.4),
-            nn.Linear(128, 4)
-        )
-        
-        # Stress indicator classifier (calm, fidgeting, restless, stillness)
-        self.stress_classifier = nn.Sequential(
-            nn.Linear(512, 128),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.4),
-            nn.Linear(128, 4)
-        )
+        # NOTE: Classifiers (trajectory, posture, stress) moved to MentalHealthClassifier
+        # post-fusion for unified predictions using both facial and posture features
         
         # Initialize weights properly
         self._init_weights()
@@ -212,16 +193,16 @@ class PostureTemporalModel(nn.Module):
     
     def forward(self, x: torch.Tensor, 
                 hidden: Optional[Tuple[torch.Tensor, torch.Tensor]] = None
-               ) -> Tuple[torch.Tensor, torch.Tensor, Tuple]:
+               ) -> Tuple[torch.Tensor, Tuple]:
         """
-        Forward pass.
+        Forward pass - extracts embedding only.
         
         Args:
             x: Input tensor of shape (B, T, input_dim).
             hidden: Optional LSTM hidden state.
             
         Returns:
-            Tuple of (embedding, trajectory_logits, hidden_state).
+            Tuple of (embedding, hidden_state).
         """
         # TCN encoding
         tcn_out = self.tcn(x)
@@ -238,10 +219,7 @@ class PostureTemporalModel(nn.Module):
         # Project to embedding
         embedding = self.projection(last_output)
         
-        # Classify trajectory
-        trajectory = self.trajectory_classifier(embedding)
-        
-        return embedding, trajectory, hidden
+        return embedding, hidden
     
     def process_sequence(self, feature_sequence: np.ndarray) -> TemporalPostureResult:
         """
@@ -270,25 +248,18 @@ class PostureTemporalModel(nn.Module):
         x = x.unsqueeze(0).to(self._device)  # Add batch dim
         
         with torch.no_grad():
-            embedding, trajectory_logits, _ = self.forward(x)
-            trajectory_probs = torch.softmax(trajectory_logits, dim=1)
+            embedding, _ = self.forward(x)
         
         embedding_np = embedding.cpu().numpy()[0]
-        probs_np = trajectory_probs.cpu().numpy()[0]
         
-        trajectories = ['stable', 'deteriorating', 'improving']
-        trajectory_idx = np.argmax(probs_np)
-        
-        # Analyze sequence for additional metrics
+        # Analyze sequence for additional heuristic metrics
         stillness_duration = self._compute_stillness(feature_sequence)
         state_transitions = self._count_transitions(feature_sequence)
         
         return TemporalPostureResult(
             pattern_embedding=embedding_np,
-            posture_trajectory=trajectories[trajectory_idx],
             stillness_duration=stillness_duration,
-            state_transitions=state_transitions,
-            prediction_confidence=float(probs_np[trajectory_idx])
+            state_transitions=state_transitions
         )
     
     def _compute_stillness(self, features: np.ndarray) -> float:

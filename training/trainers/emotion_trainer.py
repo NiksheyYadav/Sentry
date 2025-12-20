@@ -292,7 +292,10 @@ def train_emotion_model(
     batch_size: int = 32,
     learning_rate: float = 3e-4,
     device: str = 'cuda',
-    num_workers: int = 4
+    num_workers: int = 4,
+    balance_classes: bool = False,
+    target_samples_per_class: Optional[int] = None,
+    use_aggressive_augmentation: bool = False
 ) -> Dict:
     """
     Main training function.
@@ -305,6 +308,10 @@ def train_emotion_model(
         batch_size: Batch size
         learning_rate: Learning rate
         device: Training device
+        num_workers: Number of data loading workers
+        balance_classes: If True, oversample minority classes (sad, neutral)
+        target_samples_per_class: Target samples per class when balancing
+        use_aggressive_augmentation: Use extra strong augmentation for balanced data
         
     Returns:
         Training history
@@ -312,15 +319,56 @@ def train_emotion_model(
     from ..datasets import AffectNetDataset, FER2013Dataset
     from ..datasets.affectnet import create_affectnet_loaders
     from ..datasets.fer2013 import create_fer2013_loaders
+    from ..datasets.transforms import get_train_transforms, get_val_transforms, get_aggressive_transforms
+    
+    # Select appropriate transforms
+    train_transform = get_aggressive_transforms() if use_aggressive_augmentation else get_train_transforms()
+    val_transform = get_val_transforms()
     
     # Create data loaders
     if dataset == 'affectnet':
-        train_loader, val_loader = create_affectnet_loaders(
-            data_dir, 
-            batch_size=batch_size,
-            num_workers=num_workers,
-            num_classes=6
-        )
+        if balance_classes:
+            # Create balanced dataset manually
+            from torch.utils.data import DataLoader
+            
+            train_dataset = AffectNetDataset(
+                root_dir=data_dir,
+                split='train',
+                transform=train_transform,
+                num_classes=6,
+                balance_classes=True,
+                target_samples_per_class=target_samples_per_class
+            )
+            val_dataset = AffectNetDataset(
+                root_dir=data_dir,
+                split='val',
+                transform=val_transform,
+                num_classes=6,
+                balance_classes=False  # Don't balance validation
+            )
+            
+            train_loader = DataLoader(
+                train_dataset,
+                batch_size=batch_size,
+                shuffle=True,
+                num_workers=num_workers,
+                pin_memory=True,
+                drop_last=True
+            )
+            val_loader = DataLoader(
+                val_dataset,
+                batch_size=batch_size,
+                shuffle=False,
+                num_workers=num_workers,
+                pin_memory=True
+            )
+        else:
+            train_loader, val_loader = create_affectnet_loaders(
+                data_dir, 
+                batch_size=batch_size,
+                num_workers=num_workers,
+                num_classes=6
+            )
         num_classes = 6
     else:
         train_loader, val_loader = create_fer2013_loaders(
@@ -343,9 +391,9 @@ def train_emotion_model(
     config = FacialConfig(emotion_classes=emotion_classes)
     model = EmotionClassifier(config)
     
-    # Get class weights for imbalanced data
+    # Get class weights for imbalanced data (less important when balanced)
     class_weights = None
-    if hasattr(train_loader.dataset, 'get_class_weights'):
+    if not balance_classes and hasattr(train_loader.dataset, 'get_class_weights'):
         class_weights = train_loader.dataset.get_class_weights()
     
     # Create trainer
@@ -380,6 +428,12 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--batch-size', type=int, default=32)
     parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--balance', action='store_true',
+                        help='Balance classes by oversampling minority classes (sad, neutral)')
+    parser.add_argument('--target-samples', type=int, default=None,
+                        help='Target samples per class when balancing (default: match majority class)')
+    parser.add_argument('--aggressive', action='store_true',
+                        help='Use extra aggressive augmentation (recommended with --balance)')
     
     args = parser.parse_args()
     
@@ -389,9 +443,12 @@ if __name__ == '__main__':
         dataset=args.dataset,
         epochs=args.epochs,
         batch_size=args.batch_size,
-
         learning_rate=args.lr,
-        num_workers=4
+        num_workers=4,
+        balance_classes=args.balance,
+        target_samples_per_class=args.target_samples,
+        use_aggressive_augmentation=args.aggressive
     )
     
     print(f"\nTraining complete! Best validation accuracy: {max(history['val_acc']):.2f}%")
+

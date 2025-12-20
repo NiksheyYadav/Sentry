@@ -72,6 +72,12 @@ class TestAlertSystem:
             anxiety_level='minimal',
             anxiety_confidence=0.9,
             anxiety_probabilities={'minimal': 0.9, 'mild': 0.07, 'moderate': 0.02, 'severe': 0.01},
+            posture_archetype='upright',
+            posture_archetype_confidence=0.8,
+            stress_indicator='calm',
+            stress_indicator_confidence=0.85,
+            trajectory='stable',
+            trajectory_confidence=0.9,
             primary_concern='none',
             overall_severity=0.0,
             requires_attention=False
@@ -95,6 +101,12 @@ class TestAlertSystem:
             anxiety_level='minimal',
             anxiety_confidence=0.7,
             anxiety_probabilities={'minimal': 0.7, 'mild': 0.2, 'moderate': 0.08, 'severe': 0.02},
+            posture_archetype='slouched',
+            posture_archetype_confidence=0.7,
+            stress_indicator='restless',
+            stress_indicator_confidence=0.8,
+            trajectory='deteriorating',
+            trajectory_confidence=0.75,
             primary_concern='stress',
             overall_severity=1.0,
             requires_attention=True
@@ -120,6 +132,12 @@ class TestAlertSystem:
             anxiety_level='minimal',
             anxiety_confidence=0.7,
             anxiety_probabilities={'minimal': 0.7, 'mild': 0.2, 'moderate': 0.08, 'severe': 0.02},
+            posture_archetype='slouched',
+            posture_archetype_confidence=0.7,
+            stress_indicator='restless',
+            stress_indicator_confidence=0.8,
+            trajectory='deteriorating',
+            trajectory_confidence=0.75,
             primary_concern='stress',
             overall_severity=1.0,
             requires_attention=True
@@ -147,6 +165,12 @@ class TestAlertSystem:
             anxiety_level='minimal',
             anxiety_confidence=0.7,
             anxiety_probabilities={'minimal': 0.7, 'mild': 0.2, 'moderate': 0.08, 'severe': 0.02},
+            posture_archetype='slouched',
+            posture_archetype_confidence=0.7,
+            stress_indicator='fidgeting',
+            stress_indicator_confidence=0.75,
+            trajectory='deteriorating',
+            trajectory_confidence=0.8,
             primary_concern='stress',
             overall_severity=1.0,
             requires_attention=True
@@ -168,8 +192,8 @@ class TestConfigIntegration:
         config = Config()
         
         assert config.video.capture_fps == 30
-        assert config.video.process_fps == 10
-        assert config.video.buffer_size == 100
+        assert config.video.process_fps == 30  # Updated to match current default
+        assert config.video.buffer_size == 300  # 10 seconds at 30 FPS
         assert config.fusion.fused_dim == 1024
     
     def test_config_relationships(self):
@@ -200,6 +224,12 @@ class TestMentalHealthPrediction:
             anxiety_level='mild',
             anxiety_confidence=0.65,
             anxiety_probabilities={'minimal': 0.2, 'mild': 0.65, 'moderate': 0.12, 'severe': 0.03},
+            posture_archetype='upright',
+            posture_archetype_confidence=0.75,
+            stress_indicator='calm',
+            stress_indicator_confidence=0.7,
+            trajectory='stable',
+            trajectory_confidence=0.8,
             primary_concern='stress',
             overall_severity=0.5,
             requires_attention=False
@@ -221,6 +251,12 @@ class TestMentalHealthPrediction:
             anxiety_level='minimal',
             anxiety_confidence=0.9,
             anxiety_probabilities={'minimal': 0.9, 'mild': 0.08, 'moderate': 0.015, 'severe': 0.005},
+            posture_archetype='slouched',
+            posture_archetype_confidence=0.85,
+            stress_indicator='restless',
+            stress_indicator_confidence=0.9,
+            trajectory='deteriorating',
+            trajectory_confidence=0.85,
             primary_concern='stress',
             overall_severity=1.0,
             requires_attention=True

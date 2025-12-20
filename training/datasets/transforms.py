@@ -67,6 +67,49 @@ def get_train_transforms(
     return transforms.Compose(transform_list)
 
 
+def get_aggressive_transforms(
+    image_size: Tuple[int, int] = (224, 224)
+) -> transforms.Compose:
+    """
+    Get VERY aggressive transforms for oversampled minority class images.
+    
+    Use this with balanced datasets to maximize diversity of augmented samples
+    from underrepresented classes like sad and neutral.
+    
+    Args:
+        image_size: Output image size (height, width)
+        
+    Returns:
+        Composed aggressive training transforms
+    """
+    return transforms.Compose([
+        transforms.Resize((image_size[0] + 48, image_size[1] + 48)),
+        transforms.RandomCrop(image_size),
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomRotation(30),  # Stronger rotation
+        transforms.ColorJitter(
+            brightness=0.4,
+            contrast=0.4,
+            saturation=0.4,
+            hue=0.2
+        ),
+        transforms.RandomAffine(
+            degrees=15,
+            translate=(0.2, 0.2),
+            scale=(0.8, 1.2),
+            shear=15
+        ),
+        transforms.RandomApply([transforms.GaussianBlur(kernel_size=5, sigma=(0.1, 3.0))], p=0.3),
+        transforms.RandomPerspective(distortion_scale=0.15, p=0.3),
+        transforms.RandomAdjustSharpness(sharpness_factor=2, p=0.2),
+        transforms.RandomAutocontrast(p=0.2),
+        transforms.Grayscale(num_output_channels=1),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5], std=[0.5]),
+        transforms.RandomErasing(p=0.3, scale=(0.02, 0.25), ratio=(0.3, 3.3))
+    ])
+
+
 def get_val_transforms(
     image_size: Tuple[int, int] = (224, 224)
 ) -> transforms.Compose:

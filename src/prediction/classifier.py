@@ -13,7 +13,7 @@ from ..config import PredictionConfig, FusionConfig
 
 @dataclass
 class MentalHealthPrediction:
-    """Mental health assessment prediction."""
+    """Mental health assessment prediction with posture-based indicators."""
     # Stress assessment
     stress_level: str
     stress_confidence: float
@@ -28,6 +28,14 @@ class MentalHealthPrediction:
     anxiety_level: str
     anxiety_confidence: float
     anxiety_probabilities: Dict[str, float]
+    
+    # Posture-based predictions (moved from posture model to post-fusion)
+    posture_archetype: str  # upright, slouched, open, closed
+    posture_archetype_confidence: float
+    stress_indicator: str  # calm, fidgeting, restless, stillness
+    stress_indicator_confidence: float
+    trajectory: str  # stable, deteriorating, improving
+    trajectory_confidence: float
     
     # Overall
     primary_concern: str
@@ -57,12 +65,15 @@ class ClassificationHead(nn.Module):
 
 class MentalHealthClassifier(nn.Module):
     """
-    Three-headed classifier for mental health assessment.
+    Multi-headed classifier for mental health assessment.
     
     Produces calibrated predictions for:
     - Stress (3 levels)
     - Depression (4 levels)
     - Anxiety (4 levels)
+    - Posture archetype (4 types) - moved from posture model
+    - Stress indicator (4 types) - moved from posture model  
+    - Trajectory (3 types) - moved from posture model
     """
     
     def __init__(self, 
@@ -90,7 +101,7 @@ class MentalHealthClassifier(nn.Module):
             nn.Dropout(0.2)
         )
         
-        # Classification heads
+        # Mental health classification heads
         self.stress_head = ClassificationHead(
             512, len(self.pred_config.stress_levels)
         )
@@ -99,6 +110,17 @@ class MentalHealthClassifier(nn.Module):
         )
         self.anxiety_head = ClassificationHead(
             512, len(self.pred_config.anxiety_levels)
+        )
+        
+        # Posture-based classification heads (moved from posture model)
+        self.posture_archetype_head = ClassificationHead(
+            512, len(self.pred_config.posture_archetypes)
+        )
+        self.stress_indicator_head = ClassificationHead(
+            512, len(self.pred_config.stress_indicators)
+        )
+        self.trajectory_head = ClassificationHead(
+            512, len(self.pred_config.trajectories)
         )
         
         # Temperature parameter for calibration
@@ -139,20 +161,31 @@ class MentalHealthClassifier(nn.Module):
         # Shared features
         shared = self.shared_backbone(fused_features)
         
-        # Get logits from each head
+        # Mental health predictions
         stress_logits = self.stress_head(shared)
         depression_logits = self.depression_head(shared)
         anxiety_logits = self.anxiety_head(shared)
+        
+        # Posture-based predictions
+        posture_logits = self.posture_archetype_head(shared)
+        stress_ind_logits = self.stress_indicator_head(shared)
+        trajectory_logits = self.trajectory_head(shared)
         
         # Apply temperature scaling
         stress_logits = stress_logits / self.temperature
         depression_logits = depression_logits / self.temperature
         anxiety_logits = anxiety_logits / self.temperature
+        posture_logits = posture_logits / self.temperature
+        stress_ind_logits = stress_ind_logits / self.temperature
+        trajectory_logits = trajectory_logits / self.temperature
         
         return {
             'stress': stress_logits,
             'depression': depression_logits,
-            'anxiety': anxiety_logits
+            'anxiety': anxiety_logits,
+            'posture_archetype': posture_logits,
+            'stress_indicator': stress_ind_logits,
+            'trajectory': trajectory_logits
         }
     
     def predict(self, fused_features: np.ndarray, 
@@ -182,7 +215,7 @@ class MentalHealthClassifier(nn.Module):
                     outputs = self.forward(x)
                 all_outputs.append(outputs)
             
-            # Average predictions
+            # Average predictions for all heads
             stress_probs = torch.stack([
                 F.softmax(o['stress'], dim=1) for o in all_outputs
             ]).mean(dim=0)
@@ -191,6 +224,15 @@ class MentalHealthClassifier(nn.Module):
             ]).mean(dim=0)
             anxiety_probs = torch.stack([
                 F.softmax(o['anxiety'], dim=1) for o in all_outputs
+            ]).mean(dim=0)
+            posture_probs = torch.stack([
+                F.softmax(o['posture_archetype'], dim=1) for o in all_outputs
+            ]).mean(dim=0)
+            stress_ind_probs = torch.stack([
+                F.softmax(o['stress_indicator'], dim=1) for o in all_outputs
+            ]).mean(dim=0)
+            trajectory_probs = torch.stack([
+                F.softmax(o['trajectory'], dim=1) for o in all_outputs
             ]).mean(dim=0)
             
             self.disable_mc_dropout()
@@ -201,18 +243,27 @@ class MentalHealthClassifier(nn.Module):
                 stress_probs = F.softmax(outputs['stress'], dim=1)
                 depression_probs = F.softmax(outputs['depression'], dim=1)
                 anxiety_probs = F.softmax(outputs['anxiety'], dim=1)
+                posture_probs = F.softmax(outputs['posture_archetype'], dim=1)
+                stress_ind_probs = F.softmax(outputs['stress_indicator'], dim=1)
+                trajectory_probs = F.softmax(outputs['trajectory'], dim=1)
         
         # Convert to numpy
         stress_probs = stress_probs.cpu().numpy()[0]
         depression_probs = depression_probs.cpu().numpy()[0]
         anxiety_probs = anxiety_probs.cpu().numpy()[0]
+        posture_probs = posture_probs.cpu().numpy()[0]
+        stress_ind_probs = stress_ind_probs.cpu().numpy()[0]
+        trajectory_probs = trajectory_probs.cpu().numpy()[0]
         
-        # Build prediction
+        # Build prediction indices
         stress_idx = np.argmax(stress_probs)
         depression_idx = np.argmax(depression_probs)
         anxiety_idx = np.argmax(anxiety_probs)
+        posture_idx = np.argmax(posture_probs)
+        stress_ind_idx = np.argmax(stress_ind_probs)
+        trajectory_idx = np.argmax(trajectory_probs)
         
-        # Determine primary concern
+        # Determine primary concern (mental health only)
         severities = {
             'stress': stress_idx / (len(self.pred_config.stress_levels) - 1),
             'depression': depression_idx / (len(self.pred_config.depression_levels) - 1),
@@ -247,6 +298,12 @@ class MentalHealthClassifier(nn.Module):
                 level: float(anxiety_probs[i])
                 for i, level in enumerate(self.pred_config.anxiety_levels)
             },
+            posture_archetype=self.pred_config.posture_archetypes[posture_idx],
+            posture_archetype_confidence=float(posture_probs[posture_idx]),
+            stress_indicator=self.pred_config.stress_indicators[stress_ind_idx],
+            stress_indicator_confidence=float(stress_ind_probs[stress_ind_idx]),
+            trajectory=self.pred_config.trajectories[trajectory_idx],
+            trajectory_confidence=float(trajectory_probs[trajectory_idx]),
             primary_concern=primary_concern,
             overall_severity=float(overall_severity),
             requires_attention=requires_attention
