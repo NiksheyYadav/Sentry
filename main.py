@@ -154,8 +154,12 @@ class MentalHealthPipeline:
                 prediction=result.get('prediction'),
                 alert=result.get('alert'),
                 emotion_result=result.get('emotion_result'),
-                additional_info=result.get('info')
+                additional_info=result.get('info'),
+                snapshot_face=getattr(self, '_current_snapshot', None)
             )
+            
+            # Reset one-time snapshot
+            self._current_snapshot = None
             
             # Handle key press
             key = self.monitor.wait_key(1)
@@ -164,6 +168,17 @@ class MentalHealthPipeline:
             elif key == ord('r'):
                 self._reset_temporal()
                 print("Temporal state reset")
+            elif key == ord('s'):
+                # Take snapshot
+                face = result.get('face')
+                if face:
+                    x1, y1, x2, y2 = face.bbox
+                    # Ensure bbox is within frame
+                    h, w = timestamped.frame.shape[:2]
+                    x1, y1 = max(0, x1), max(0, y1)
+                    x2, y2 = min(w, x2), min(h, y2)
+                    self._current_snapshot = timestamped.frame[y1:y2, x1:x2].copy()
+                    print("Snapshot captured!")
         
         self.stop()
         print("\nAssessment stopped.")
@@ -204,10 +219,25 @@ class MentalHealthPipeline:
             
             facial_embedding = emotion.embedding
             self._last_emotion = stable_emotion
-            self._last_emotion_probs = emotion.probabilities
+            
+            # Sync probabilities with stable label to prevent UI mismatch
+            # If stable emotion changed, ensure it's the winner in probabilities
+            updated_probs = emotion.probabilities.copy()
+            if stable_emotion in updated_probs and updated_probs[stable_emotion] < 0.5:
+                # Boost the stable emotion and suppress others
+                updated_probs[stable_emotion] = 0.8
+                others_sum = sum(v for k, v in updated_probs.items() if k != stable_emotion)
+                if others_sum > 0:
+                    scale = 0.2 / others_sum
+                    for k in updated_probs:
+                        if k != stable_emotion:
+                            updated_probs[k] *= scale
+            
+            self._last_emotion_probs = updated_probs
             result['info']['emotion'] = stable_emotion
-            result['emotion_result'] = emotion  # Pass full object but updated label
+            result['emotion_result'] = emotion
             result['emotion_result'].emotion = stable_emotion
+            result['emotion_result'].probabilities = updated_probs
         
         # Posture analysis
         posture_embedding = None

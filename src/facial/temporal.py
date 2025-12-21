@@ -169,37 +169,51 @@ class FacialTemporalAggregator:
     
     def get_stable_emotion(self) -> str:
         """
-        Get the stable emotion using hysteresis and temporal voting.
+        Get the stable emotion using weighted temporal voting and hysteresis.
         
-        Prevents rapid flickering between emotions by requiring persistent
-        evidence to change states.
-        
-        Returns:
-            Stable emotion label.
+        Uses a sliding window and weights votes by model confidence to 
+        filter out low-confidence flickering.
         """
         if len(self._emotion_buffer) < 5:
             return self._last_dominant_emotion or 'neutral'
             
-        # Count emotions in the last 1 second (10 frames)
-        recent = list(self._emotion_buffer)[-10:]
-        recent_dominants = [max(p, key=p.get) for p in recent]
+        # Use a larger window for stability (up to 15 frames ≈ 1.5 seconds)
+        window_size = 15
+        recent = list(self._emotion_buffer)[-window_size:]
         
-        counts = {}
-        for emo in recent_dominants:
-            counts[emo] = counts.get(emo, 0) + 1
-            
-        # Get the winner of the vote
-        voted_emotion = max(counts, key=counts.get)
-        vote_count = counts[voted_emotion]
+        # Weighted voting: sum of probabilities across the window
+        weighted_counts = {}
+        for probs in recent:
+            for emo, score in probs.items():
+                weighted_counts[emo] = weighted_counts.get(emo, 0) + score
+                
+        # Get the winner of the weighted vote
+        voted_emotion = max(weighted_counts, key=weighted_counts.get)
         
-        # Hysteresis: Only switch if the new emotion is strong (e.g., > 60% of window)
-        # and different from current stable state.
+        # Calculate dominance (ratio of winner to total weight)
+        total_weight = sum(weighted_counts.values())
+        dominance = weighted_counts[voted_emotion] / total_weight if total_weight > 0 else 0
+        
         current_stable = self._last_dominant_emotion or 'neutral'
         
+        # Hysteresis Logic:
+        # Only switch if the new emotion is significantly dominant or persistent
         if voted_emotion != current_stable:
-            # High threshold for switching away from Happy to Anger/Fear
-            threshold = 7 if current_stable == 'happy' else 5
-            if vote_count >= threshold:
+            # Different thresholds for different transitions
+            # Switching away from Neutral or Happy requires more evidence
+            # Switching away from Neutral or Happy requires less evidence now for speed
+            if current_stable in ['neutral', 'happy']:
+                threshold = 0.28  # Drastically lowered for instant reaction
+            elif voted_emotion in ['anger', 'fear', 'sad', 'surprise'] and current_stable in ['anger', 'fear', 'sad', 'surprise']:
+                # Intra-cluster switch (e.g., Sad to Anger)
+                # Keep moderate hysteresis but remove distance penalty
+                threshold = 0.40
+            else:
+                threshold = 0.32  # General baseline
+                
+            if dominance > threshold:
+                # Require more than a single frame's worth of dominance
+                # (15 frames * average score per frame)
                 self._last_dominant_emotion = voted_emotion
                 return voted_emotion
                 

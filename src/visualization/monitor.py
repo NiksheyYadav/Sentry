@@ -65,8 +65,9 @@ class RealtimeMonitor:
         self._is_active = False
         
         # Panel dimensions
-        self.panel_width = 300
+        self.panel_width = 320
         self.graph_height = 100
+        self._last_snapshot: Optional[np.ndarray] = None
     
     def start(self) -> None:
         """Initialize display window."""
@@ -85,21 +86,10 @@ class RealtimeMonitor:
                prediction: Optional[MentalHealthPrediction] = None,
                alert: Optional[Alert] = None,
                emotion_result: Optional[EmotionResult] = None,
-               additional_info: Optional[Dict] = None) -> np.ndarray:
+               additional_info: Optional[Dict] = None,
+               snapshot_face: Optional[np.ndarray] = None) -> np.ndarray:
         """
         Update display with current frame and analysis results.
-        
-        Args:
-            frame: Current video frame (BGR).
-            face_detection: Face detection result.
-            pose_result: Pose estimation result.
-            prediction: Mental health prediction.
-            alert: Current alert if any.
-            emotion_result: Facial emotion result.
-            additional_info: Additional metrics to display.
-            
-        Returns:
-            Annotated frame for display.
         """
         # Calculate FPS
         current_time = time.time()
@@ -115,6 +105,10 @@ class RealtimeMonitor:
         canvas = np.zeros((h, w + self.panel_width, 3), dtype=np.uint8)
         canvas[:, :, :] = self.COLORS['background']
         
+        # Store snapshot to display in panel
+        if snapshot_face is not None:
+            self._last_snapshot = snapshot_face
+            
         # Draw main frame
         annotated_frame = frame.copy()
         
@@ -299,6 +293,49 @@ class RealtimeMonitor:
                 self._draw_confidence_bar(canvas, x + 150, y - 8, prob)
                 y += 20
             y += 20
+            
+        # Advanced Ratings Section
+        cv2.line(canvas, (x, y), (x + self.panel_width - 20, y), self.COLORS['neutral'], 1)
+        y += 20
+        cv2.putText(canvas, "System Ratings", (x, y),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.COLORS['text'], 1)
+        y += 25
+        
+        # Posture Rating
+        posture_score = 0.5
+        if additional_info:
+            posture_score = float(additional_info.get('posture', 0.5)) / 30.0 # Curvature
+            
+        posture_rating, p_color = self._get_posture_rating(posture_score)
+        cv2.putText(canvas, f"Posture: {posture_rating}", (x, y),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, p_color, 1)
+        y += 25
+        
+        # Training Rating (Well-being Score)
+        wellbeing_score = 85 # Default
+        if prediction:
+            # Simple heuristic for well-being score
+            neu_idx = ['low', 'normal', 'high'].index(prediction.neutral_level)
+            wellbeing_score = 40 + (neu_idx * 20)
+            if prediction.stress_level == 'high': wellbeing_score -= 30
+            
+        cv2.putText(canvas, f"Well-being Score: {wellbeing_score}/100", (x, y),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.COLORS['secondary'], 1)
+        y += 35
+        
+        # Snapshot Photo Display
+        if self._last_snapshot is not None:
+            cv2.putText(canvas, "Latest Snapshot:", (x, y),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.COLORS['text'], 1)
+            y += 15
+            # Resize snapshot to fit panel
+            size = 120
+            try:
+                snapshot_resized = cv2.resize(self._last_snapshot, (size, size))
+                canvas[y:y+size, x:x+size] = snapshot_resized
+                y += size + 20
+            except:
+                pass
         
         # Alert section
         if alert is not None:
@@ -345,6 +382,17 @@ class RealtimeMonitor:
                 cv2.putText(canvas, text, (x, y),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, self.COLORS['neutral'], 1)
                 y += 18
+    
+    def _get_posture_rating(self, score: float) -> Tuple[str, Tuple[int, int, int]]:
+        """Convert posture score to rating and color."""
+        if score < 0.2:
+            return "Excellent", self.COLORS['secondary']
+        elif score < 0.4:
+            return "Good", self.COLORS['secondary']
+        elif score < 0.7:
+            return "Fair", self.COLORS['warning']
+        else:
+            return "Poor", self.COLORS['danger']
     
     def _draw_confidence_bar(self, canvas: np.ndarray, x: int, y: int,
                               confidence: float, width: int = 80, height: int = 10) -> None:

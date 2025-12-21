@@ -186,18 +186,103 @@ class EmotionClassifier(nn.Module):
         )
     
     def _refine_probabilities(self, probs: Dict[str, float]) -> Dict[str, float]:
-        """Refine probabilities to reduce noise and cross-category confusion."""
+        """Refine probabilities using mutual exclusion and entropy-based noise rejection."""
         refined = probs.copy()
         
-        # If Happy is dominant, suppress Anger and Fear which are common noise targets
-        if refined.get('happy', 0) > 0.5:
-            suppression_factor = 0.2
-            for emo in ['anger', 'fear']:
-                if emo in refined:
-                    refined[emo] *= suppression_factor
+        # Calculate entropy (measure of uncertainty)
+        # Higher entropy means the model is confused
+        import math
+        vals = [v for v in refined.values() if v > 0]
+        entropy = -sum(v * math.log2(v) for v in vals)
+        
+        # 1. Entropy-Based Rejection: Aggressively reduced to allow emotions to surface
+        # We no longer apply a special "distance" penalty to Anger
+        happy_prob = refined.get('happy', 0)
+        is_anger_present = refined.get('anger', 0) > 0.2 and happy_prob < 0.2
+        
+        if entropy > 1.85:
+            # Minimal Neutral boost (Reduced to 0.05)
+            boost = 0.02 if is_anger_present else 0.05 
+            refined['neutral'] = refined.get('neutral', 0) + boost
+            # Very light suppression (Increased to 0.85) to favor model predictions
+            suppression = 0.9 if is_anger_present else 0.85
+            for k in refined:
+                if k != 'neutral':
+                    # Protect happy if it's even slightly present
+                    if k == 'happy' and happy_prob > 0.1:
+                        continue
+                    refined[k] *= suppression
+        
+        # 1b. Specific Anger Boost: Aggressive 1.5x boost
+        if is_anger_present and refined['anger'] > refined.get('neutral', 0) * 0.5:
+            refined['anger'] *= 1.5
+        elif is_anger_present:
+            # Even if weak, give it a fighting chance
+            refined['anger'] *= 1.2
+        
+        # 1c. Specific Neutral Suppression: If negative emotions are trying to surface
+        # but are being held back by a moderate neutral baseline.
+        neg_emotions_raw = ['anger', 'fear', 'sad']
+        max_neg_raw = max(refined.get(e, 0) for e in neg_emotions_raw)
+        if max_neg_raw > 0.15:
+            # Shift weight from neutral to the negative cluster
+            shift = min(refined.get('neutral', 0), 0.2)
+            refined['neutral'] -= shift
+            # Give the shift to the strongest negative emotion
+            winner_neg = max(neg_emotions_raw, key=lambda e: refined.get(e, 0))
+            refined[winner_neg] += shift
             
-            # Normalize again
-            total = sum(refined.values())
+        # 2. Mutual Exclusion: Happy vs Surprise vs Negative
+        happy_prob = refined.get('happy', 0)
+        surprise_prob = refined.get('surprise', 0)
+        
+        # 2a. Happy vs Surprise Disentanglement
+        if happy_prob > 0.35 and surprise_prob > 0.1:
+            # If smiling, it's probably not "Surprise" (which usually has eyebrows up)
+            refined['surprise'] *= 0.4
+        elif surprise_prob > 0.35 and happy_prob > 0.1:
+            # If surprised, it's rarely "Happy" at the same time
+            if happy_prob < 0.5: # Unless it's a very big happy surprise
+                refined['happy'] *= 0.5
+                
+        # 2b. Happy vs Negative Emotions
+        negative_emotions = ['anger', 'fear', 'sad']
+        neg_prob = sum(refined.get(e, 0) for e in negative_emotions)
+        
+        if happy_prob > 0.4:
+            # Aggressively suppress negative emotions if happy is strong
+            suppression = 0.1 if happy_prob > 0.6 else 0.3
+            for emo in negative_emotions:
+                if emo in refined:
+                    refined[emo] *= suppression
+        elif neg_prob > 0.5:
+            # Suppress happy if negative emotions are collectively strong
+            refined['happy'] = refined.get('happy', 0) * 0.1
+            # Also aggressively suppress neutral if negative is winning
+            refined['neutral'] *= 0.2
+            
+        # 3. Specific Confusion: Anger vs Fear vs Sad
+        # These are often confused; we use a "Winner-Takes-All" strategy
+        # to prevent flickering within the negative cluster.
+        cluster_emotions = ['anger', 'fear', 'sad']
+        cluster_probs = {e: refined.get(e, 0) for e in cluster_emotions}
+        
+        if sum(cluster_probs.values()) > 0.4:
+            winner = max(cluster_probs, key=cluster_probs.get)
+            win_val = cluster_probs[winner]
+            
+            # If there's a clear candidate or collective strength
+            if win_val > 0.25:
+                # Polarize: Boost the winner and suppress others in the cluster
+                for emo in cluster_emotions:
+                    if emo == winner:
+                        refined[emo] *= 1.25 # Boost the winner
+                    else:
+                        refined[emo] *= 0.15 # Heavily suppress others
+            
+        # 4. Final Normalization
+        total = sum(refined.values())
+        if total > 0:
             refined = {k: v / total for k, v in refined.items()}
             
         return refined

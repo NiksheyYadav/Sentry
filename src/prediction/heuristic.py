@@ -132,12 +132,31 @@ class HeuristicPredictor:
             self._neutral_history.pop(0)
             self._anxiety_history.pop(0)
         
-        # Happiness Lock: If happy in history, strictly cap stress/anxiety
-        is_recently_happy = any(h > 0.7 for h in self._neutral_history[-10:])
-        if is_recently_happy or emotion == 'happy':
+        # Happiness/Neutral Lock: If happy or neutral, strictly cap stress/anxiety
+        # Check current emotion and recent history (last 10 frames)
+        recent_emotions = []
+        if len(self._neutral_history) > 0:
+            # We don't have a direct emotion history, but we can infer from neutral_score
+            # or better yet, just use the passed 'emotion' argument
+            pass
+            
+        if emotion in ['happy', 'neutral']:
             stress_score = min(stress_score, 0.2)
-            anxiety_score = min(anxiety_score, 0.2)
-            neutral_score = max(neutral_score, 0.7)
+            anxiety_score = min(anxiety_score, 0.15)
+            # Boost neutral score if face is neutral
+            if emotion == 'neutral':
+                neutral_score = max(neutral_score, 0.8)
+            else:
+                neutral_score = max(neutral_score, 0.6)
+        elif emotion == 'anger':
+            # Aggressively boost stress when angry
+            stress_score = max(stress_score, 0.8)
+            neutral_score = min(neutral_score, 0.15) # Forced low
+            anxiety_score = min(anxiety_score, 0.4)
+        elif emotion == 'sad':
+            # Boost sadness factors and suppress neutral
+            stress_score = max(stress_score, 0.5)
+            neutral_score = min(neutral_score, 0.15) # Forced low
             
         # Convert to levels
         stress_level, stress_probs = self._score_to_level(
