@@ -89,6 +89,31 @@ Multi-task Cascaded Convolutional Networks for robust face detection.
 
 **Source:** `src/facial/emotion.py`
 
+### FaceMesh Expression Analysis
+
+MediaPipe FaceMesh provides 468 facial landmarks for precise expression detection.
+
+**Used For:**
+- Expression validation (smile, surprise, frown detection)
+- Emotion post-processing corrections
+- Real-time meshgrid visualization
+
+**Expression Features:**
+| Feature | Landmarks Used | Purpose |
+|---------|----------------|---------|
+| Eye Aspect Ratio (EAR) | 6 points per eye | Blink/openness detection |
+| Eyebrow Raise | 10 points per brow | Surprise/fear detection |
+| Mouth Openness | Lip landmarks | Surprise/speech detection |
+| Smile Score | Mouth corners | Happy detection |
+
+**Visualization Colors:**
+- 🟢 **Eyes** (green) - Tracks openness
+- 🔵 **Eyebrows** (blue) - Tracks raising
+- 🟣 **Lips** (magenta) - Tracks smiles
+- 🟠 **Face contour** (orange) - Tracks jaw
+
+**Source:** `src/facial/facemesh_analyzer.py`, `src/visualization/facemesh_visualizer.py`
+
 ---
 
 ## 3. Posture Analysis
@@ -191,7 +216,10 @@ src/
 │
 ├── facial/
 │   ├── emotion.py            # EmotionClassifier (DenseNet121)
-│   └── detector.py           # MTCNN wrapper
+│   ├── detector.py           # BlazeFace face detector
+│   ├── facemesh_analyzer.py  # MediaPipe FaceMesh 468 landmarks
+│   ├── postprocessor.py      # Emotion post-processing & temporal smoothing
+│   └── action_units.py       # Action Unit detection
 │
 ├── posture/
 │   ├── pose_estimator.py     # MediaPipe wrapper
@@ -199,17 +227,19 @@ src/
 │   └── temporal_model.py     # TCN-LSTM model
 │
 ├── fusion/
-│   └── fusion.py             # Cross-attention fusion
+│   └── fusion_network.py     # Cross-attention fusion
 │
 ├── prediction/
 │   ├── classifier.py         # 6-head mental health classifier
-│   └── heuristic.py          # Rule-based fallback
+│   ├── heuristic.py          # Rule-based fallback
+│   └── calibration.py        # Alert system
 │
 ├── video/
 │   └── capture.py            # Video capture utilities
 │
 └── visualization/
-    └── dashboard.py          # Real-time visualization
+    ├── monitor.py            # Real-time monitoring dashboard
+    └── facemesh_visualizer.py # Face meshgrid overlay (468 landmarks)
 ```
 
 ---

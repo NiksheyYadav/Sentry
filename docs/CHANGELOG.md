@@ -9,6 +9,46 @@ Changelog for the Sentry Mental Health Assessment Framework.
 
 ---
 
+## v0.3.4 (2025-12-21)
+
+### New Features
+- **Face Meshgrid Visualization** (`src/visualization/facemesh_visualizer.py`)
+  - Replaced dot-based facial landmarks with full 468-point MediaPipe FaceMesh tesselation
+  - ~2000 triangle connections for true mesh overlay
+  - Color-coded facial regions:
+    - 🟢 **Eyes** (green) - Tracks openness and blink rate
+    - 🔵 **Eyebrows** (blue) - Tracks raising and frowning
+    - 🔵 **Nose** (cyan) - Reference point
+    - 🟣 **Lips/Mouth** (magenta) - Tracks smiles and opening
+    - 🟠 **Face contour** (orange) - Tracks jaw movement
+    - ⚪ **Irises** (white) - Eye tracking circles
+  - Configurable render modes: `full`, `minimal`, `contours`
+  - Adjustable opacity and line thickness
+
+- **Landmark Caching** (`src/facial/facemesh_analyzer.py`)
+  - FaceMesh landmarks are now cached after analysis
+  - Avoids redundant processing (was running FaceMesh twice per frame)
+  - `get_landmarks()` now returns cached landmarks from last `analyze()` call
+
+### Improvements
+- **Reduced Emotion Flickering** (`src/facial/postprocessor.py`)
+  - Raised surprise detection threshold from 0.45 → 0.6
+  - Increased temporal window from 10 → 15 frames
+  - Increased hysteresis threshold from 3 → 5 frames
+  - Less aggressive probability corrections (0.3 → 0.5)
+  - Fast-switching only when confidence > 70%
+
+### New Files
+- `src/visualization/facemesh_visualizer.py` - FaceMeshVisualizer class with MeshConfig
+
+### Files Changed
+- `src/visualization/monitor.py` - Integrated meshgrid visualizer, fixed merge conflict
+- `src/facial/facemesh_analyzer.py` - Added landmark caching, get_landmarks() method
+- `src/facial/postprocessor.py` - Added get_face_landmarks(), improved thresholds
+- `main.py` - Passes face_mesh_landmarks to monitor.update()
+
+---
+
 ## v0.3.3 (2025-12-21)
 
 ### New Features

@@ -232,10 +232,10 @@ class EmotionPostProcessor:
     
     def __init__(
         self,
-        temporal_window: int = 10,
-        expression_override_threshold: float = 0.5,
-        hysteresis_threshold: int = 3,
-        min_switch_confidence: float = 0.35
+        temporal_window: int = 15,
+        expression_override_threshold: float = 0.6,
+        hysteresis_threshold: int = 5,
+        min_switch_confidence: float = 0.45
     ):
         """
         Initialize post-processor.
@@ -327,10 +327,11 @@ class EmotionPostProcessor:
             
             # === SURPRISE Correction ===
             # FaceMesh detected surprise (wide eyes + open mouth + raised eyebrows)
-            if avg_surprise > 0.45:
-                if raw_emotion in ['sad', 'neutral', 'fear', 'anger']:
-                    smoothed_probs['surprise'] = max(smoothed_probs.get('surprise', 0), avg_surprise)
-                    smoothed_probs[raw_emotion] *= 0.3
+            # Only apply if very confident (threshold raised to reduce flickering)
+            if avg_surprise > 0.6 and avg_eye_open > 0.6 and avg_mouth_open > 0.35:
+                if raw_emotion in ['sad', 'neutral', 'anger']:
+                    smoothed_probs['surprise'] = max(smoothed_probs.get('surprise', 0), avg_surprise * 0.9)
+                    smoothed_probs[raw_emotion] *= 0.5  # Less aggressive reduction
                     correction_applied = True
                     correction_reason = f"FaceMesh: Surprise (eye={avg_eye_open:.2f}, mouth={avg_mouth_open:.2f}, brow={avg_eyebrow:.2f})"
             
@@ -388,10 +389,10 @@ class EmotionPostProcessor:
         final_emotion = max(smoothed_probs, key=smoothed_probs.get)
         final_confidence = smoothed_probs[final_emotion]
         
-        # Step 6: Apply hysteresis (but with lower threshold for strong corrections)
+        # Step 6: Apply hysteresis (require more consistent evidence to switch)
         effective_hysteresis = self.hysteresis_threshold
-        if correction_applied:
-            effective_hysteresis = 2  # Faster switching when visual evidence is strong
+        if correction_applied and final_confidence > 0.7:
+            effective_hysteresis = 3  # Faster switching only when very confident
         
         if final_emotion != self._stable_emotion:
             self._frames_at_current = 0
@@ -474,6 +475,21 @@ class EmotionPostProcessor:
             'avg_surprise': avg_surprise,
             'avg_smile': avg_smile
         }
+    
+    def get_face_landmarks(self, face_image: np.ndarray = None):
+        """
+        Get raw FaceMesh landmarks for visualization.
+        
+        Returns cached landmarks from the last analyze() call.
+        This avoids running FaceMesh twice per frame.
+        
+        Args:
+            face_image: Optional, legacy parameter (ignored if cache exists)
+            
+        Returns:
+            MediaPipe face landmarks object or None if no face detected
+        """
+        return self.expression_analyzer.get_landmarks(face_image)
 
 
 # Convenience function to create post-processor

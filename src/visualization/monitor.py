@@ -3,7 +3,7 @@
 
 import cv2
 import numpy as np
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, List, Tuple, Any
 from dataclasses import dataclass
 import time
 
@@ -13,6 +13,7 @@ from ..facial.emotion import EmotionResult
 from ..posture.pose_estimator import PoseResult
 from ..prediction.classifier import MentalHealthPrediction
 from ..prediction.calibration import Alert
+from .facemesh_visualizer import FaceMeshVisualizer, MeshConfig
 
 
 @dataclass
@@ -76,6 +77,17 @@ class RealtimeMonitor:
         self.card_radius = 10
         self.graph_height = 100
         self._last_snapshot: Optional[np.ndarray] = None
+        
+        # Face meshgrid visualizer
+        mesh_config = MeshConfig(
+            render_mode='full',
+            opacity=0.8,
+            color_regions=True,
+            show_contours=True,
+            show_irises=True,
+            line_thickness=1
+        )
+        self._mesh_visualizer = FaceMeshVisualizer(mesh_config)
     
     def start(self) -> None:
         """Initialize display window."""
@@ -168,8 +180,14 @@ class RealtimeMonitor:
                alert: Optional[Alert] = None,
                emotion_result: Optional[EmotionResult] = None,
                additional_info: Optional[Dict] = None,
-               snapshot_face: Optional[np.ndarray] = None) -> np.ndarray:
-        """Update display with current frame and analysis results."""
+               snapshot_face: Optional[np.ndarray] = None,
+               face_mesh_landmarks: Optional[any] = None) -> np.ndarray:
+        """
+        Update display with current frame and analysis results.
+        
+        Args:
+            face_mesh_landmarks: MediaPipe FaceMesh landmarks for meshgrid visualization
+        """
         # Calculate FPS
         current_time = time.time()
         fps = 1.0 / (current_time - self._last_frame_time + 1e-6)
@@ -194,9 +212,17 @@ class RealtimeMonitor:
         # Draw main frame
         annotated_frame = frame.copy()
         
-        # Draw face detection
+        # Draw face meshgrid first (behind bounding box)
+        if face_mesh_landmarks is not None and face_detection is not None:
+            # Pass the padded bbox so mesh aligns with the cropped face image
+            annotated_frame = self._mesh_visualizer.draw_mesh(
+                annotated_frame, face_mesh_landmarks, 
+                bbox=tuple(face_detection.padded_bbox))
+        
+        # Draw face detection overlay
         if face_detection is not None:
-            annotated_frame = self._draw_face(annotated_frame, face_detection, emotion_result)
+            annotated_frame = self._draw_face(annotated_frame, face_detection, emotion_result,
+                                              draw_landmarks=face_mesh_landmarks is None)
         
         # Draw pose
         if pose_result is not None:
@@ -216,8 +242,17 @@ class RealtimeMonitor:
         return canvas
     
     def _draw_face(self, frame: np.ndarray, detection: FaceDetection,
-                   emotion_result: Optional[EmotionResult] = None) -> np.ndarray:
-        """Draw face detection overlay with modern styling."""
+                   emotion_result: Optional[EmotionResult] = None,
+                   draw_landmarks: bool = True) -> np.ndarray:
+        """
+        Draw face detection overlay with modern styling.
+        
+        Args:
+            frame: Frame to draw on
+            detection: Face detection result
+            emotion_result: Optional emotion classification result
+            draw_landmarks: Whether to draw basic landmarks (disabled when meshgrid is drawn)
+        """
         x1, y1, x2, y2 = detection.bbox
         
         # Draw rounded bounding box
@@ -235,11 +270,12 @@ class RealtimeMonitor:
         cv2.line(frame, (x2, y2), (x2 - corner_len, y2), self.COLORS['accent_cyan'], 3)
         cv2.line(frame, (x2, y2), (x2, y2 - corner_len), self.COLORS['accent_cyan'], 3)
         
-        # Draw landmarks with glow effect
-        for lm in detection.landmarks:
-            x, y = int(lm[0]), int(lm[1])
-            cv2.circle(frame, (x, y), 5, self.COLORS['accent_green'], -1)
-            cv2.circle(frame, (x, y), 3, self.COLORS['text_primary'], -1)
+        # Draw basic landmarks only if meshgrid is not drawn
+        if draw_landmarks:
+            for lm in detection.landmarks:
+                x, y = int(lm[0]), int(lm[1])
+                cv2.circle(frame, (x, y), 5, self.COLORS['accent_green'], -1)
+                cv2.circle(frame, (x, y), 3, self.COLORS['text_primary'], -1)
         
         # Emotion label with background
         if emotion_result:
@@ -454,6 +490,15 @@ class RealtimeMonitor:
         cv2.circle(canvas, (x + 8, footer_y - 5), 5, self.COLORS['accent_red'], -1)
         cv2.putText(canvas, "MONITORING ACTIVE", (x + 20, footer_y),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, self.COLORS['accent_red'], 1, cv2.LINE_AA)
+    
+    def _get_posture_rating(self, posture_score: float) -> Tuple[str, Tuple[int, int, int]]:
+        """Get posture rating text and color based on score."""
+        if posture_score < 0.3:
+            return "Good", self.COLORS['accent_green']
+        elif posture_score < 0.6:
+            return "Fair", self.COLORS['accent_orange']
+        else:
+            return "Poor", self.COLORS['accent_red']
     
     def wait_key(self, delay: int = 1) -> int:
         """Wait for key press."""

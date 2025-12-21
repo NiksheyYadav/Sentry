@@ -165,7 +165,8 @@ class MentalHealthPipeline:
                 alert=result.get('alert'),
                 emotion_result=result.get('emotion_result'),
                 additional_info=result.get('info'),
-                snapshot_face=getattr(self, '_current_snapshot', None)
+                snapshot_face=getattr(self, '_current_snapshot', None),
+                face_mesh_landmarks=result.get('face_mesh_landmarks')
             )
             
             # Reset one-time snapshot
@@ -262,6 +263,12 @@ class MentalHealthPipeline:
                     confidence=postprocessed.final_confidence,
                     probabilities=postprocessed.final_probabilities,
                     embedding=emotion.embedding
+                )
+                
+                # Get FaceMesh landmarks for meshgrid visualization
+                # This reuses the analyzer from the postprocessor, no extra overhead
+                result['face_mesh_landmarks'] = self.emotion_postprocessor.get_face_landmarks(
+                    face.face_image
                 )
             else:
                 # Fallback: sync probabilities with stable emotion

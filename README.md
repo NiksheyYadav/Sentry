@@ -26,6 +26,7 @@ A deep learning system for real-time mental health assessment using facial expre
 | **Multimodal AI** | DenseNet121 (Face) + TCN-LSTM (Posture) + Cross-Attention Fusion |
 | **6 Emotions** | Neutral, Happy, Sad, Surprise, Fear, Anger |
 | **6 Predictions** | Stress, Depression, Anxiety, Posture, Stress Indicators, Trajectory |
+| **Face Meshgrid** | 468-point MediaPipe FaceMesh with color-coded regions |
 | **Real-time** | 20-30 FPS with GPU acceleration |
 | **Privacy First** | 100% local processing - no data sent externally |
 
@@ -196,15 +197,20 @@ sentry/
 ├── src/                    # Source code
 │   ├── facial/             # Face detection & emotion
 │   │   ├── emotion.py      # EmotionClassifier (DenseNet121)
-│   │   └── detector.py     # MTCNN face detector
+│   │   ├── detector.py     # BlazeFace face detector
+│   │   ├── facemesh_analyzer.py  # FaceMesh 468 landmarks
+│   │   └── postprocessor.py # Emotion post-processing
 │   ├── posture/            # Pose estimation
 │   │   ├── pose_estimator.py  # MediaPipe wrapper
 │   │   ├── features.py     # Feature extraction
 │   │   └── temporal_model.py  # TCN-LSTM model
 │   ├── fusion/             # Multimodal fusion
-│   │   └── fusion.py       # Cross-attention fusion
+│   │   └── fusion_network.py # Cross-attention fusion
 │   ├── prediction/         # Mental health prediction
 │   │   └── classifier.py   # 6-head classifier
+│   ├── visualization/      # Display & overlays
+│   │   ├── monitor.py      # Real-time dashboard
+│   │   └── facemesh_visualizer.py # Meshgrid overlay
 │   └── config.py           # Configuration
 │
 ├── training/               # Training utilities

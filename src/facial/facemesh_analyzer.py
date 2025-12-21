@@ -110,6 +110,9 @@ class FaceMeshExpressionAnalyzer:
         self._baseline_eye_height = None
         self._baseline_mouth_height = None
         self._baseline_eyebrow_height = None
+        
+        # Cache for last processed landmarks (for visualization)
+        self._last_landmarks = None
     
     def analyze(self, face_image: np.ndarray) -> Optional[ExpressionScores]:
         """
@@ -131,10 +134,12 @@ class FaceMeshExpressionAnalyzer:
         results = self.face_mesh.process(face_image)
         
         if not results.multi_face_landmarks:
+            self._last_landmarks = None
             return None
         
-        # Get landmarks as numpy array
+        # Get landmarks as numpy array and cache for visualization
         landmarks = results.multi_face_landmarks[0]
+        self._last_landmarks = landmarks  # Cache for get_landmarks()
         h, w = face_image.shape[:2]
         
         points = np.array([
@@ -347,6 +352,41 @@ class FaceMeshExpressionAnalyzer:
                 cv2.circle(annotated, (x, y), 1, color, -1)
         
         return annotated
+    
+    def get_landmarks(self, face_image: np.ndarray = None) -> Optional[any]:
+        """
+        Get raw FaceMesh landmarks for visualization.
+        
+        Returns cached landmarks from the last analyze() call, or processes
+        the image if provided and no cache exists.
+        
+        Args:
+            face_image: Optional RGB face image (only used if no cached landmarks)
+            
+        Returns:
+            MediaPipe face landmarks object or None if no face detected
+        """
+        # Return cached landmarks from last analyze() call
+        if self._last_landmarks is not None:
+            return self._last_landmarks
+        
+        # Fallback: process image if provided and no cache
+        if face_image is not None:
+            # Ensure RGB
+            if len(face_image.shape) == 2:
+                face_image = cv2.cvtColor(face_image, cv2.COLOR_GRAY2RGB)
+            elif face_image.shape[2] == 4:
+                face_image = cv2.cvtColor(face_image, cv2.COLOR_RGBA2RGB)
+            
+            results = self.face_mesh.process(face_image)
+            
+            if not results.multi_face_landmarks:
+                return None
+            
+            self._last_landmarks = results.multi_face_landmarks[0]
+            return self._last_landmarks
+        
+        return None
     
     def close(self):
         """Release resources."""
