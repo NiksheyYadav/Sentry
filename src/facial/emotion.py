@@ -272,8 +272,8 @@ class EmotionClassifier(nn.Module):
         anger_prob = refined.get('anger', 0)
         fear_prob = refined.get('fear', 0)
         
-        # If Sad is unrealistically dominant (>0.7) but Happy or Anger are present (even weakly)
-        if sad_prob > 0.7:
+        # ULTRA-AGGRESSIVE: If Sad is even moderately high (>0.5), check for overrides
+        if sad_prob > 0.5:  # LOWERED from 0.7 to catch more cases
             # Check if Happy should actually win (smile detection)
             if happy_prob > 0.01:  # Even tiny Happy signal means user is smiling
                 # OVERRIDE: User is smiling, not sad
@@ -285,16 +285,17 @@ class EmotionClassifier(nn.Module):
                     if k not in ['happy', 'sad', 'neutral']:
                         refined[k] *= 0.1
             # Check if Anger should actually win (furrowed brows, tense face)
-            # ULTRA-AGGRESSIVE: Even 0.5% Anger means user is angry, not sad
-            elif anger_prob > 0.005 or fear_prob > 0.01:  # Anger OR Fear signal
+            # REMOVED THRESHOLD: ANY Anger presence means user is angry, not sad
+            elif anger_prob > 0.001 or fear_prob > 0.005:  # Almost any signal
                 # OVERRIDE: User is angry/tense, not sad
-                refined['anger'] = 0.90  # INCREASED from 0.85 for maximum stability
-                refined['sad'] = 0.02    # LOWERED from 0.05 to almost eliminate Sad
-                refined['neutral'] = 0.03
-                # Suppress other emotions
+                refined['anger'] = 0.92  # MAXIMUM stability
+                refined['sad'] = 0.01    # Almost eliminate Sad
+                refined['neutral'] = 0.02
+                refined['surprise'] = 0.01
+                # Suppress other emotions completely
                 for k in refined:
-                    if k not in ['anger', 'sad', 'neutral']:
-                        refined[k] *= 0.05
+                    if k not in ['anger', 'sad', 'neutral', 'surprise']:
+                        refined[k] *= 0.01
         
         # Calculate entropy (measure of uncertainty)
         # Higher entropy means the model is confused

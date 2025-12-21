@@ -177,8 +177,8 @@ class FacialTemporalAggregator:
         if len(self._emotion_buffer) < 5:
             return self._last_dominant_emotion or 'neutral'
             
-        # Use a LARGER window for MORE stability (20 frames ≈ 2 seconds)
-        window_size = 20  # INCREASED from 15
+        # MAXIMUM STABILITY: 30 frames ≈ 3 seconds of smoothing
+        window_size = 30  # INCREASED from 20 for maximum stability
         recent = list(self._emotion_buffer)[-window_size:]
         
         # Weighted voting: sum of probabilities across the window
@@ -196,17 +196,17 @@ class FacialTemporalAggregator:
         
         current_stable = self._last_dominant_emotion or 'neutral'
         
-        # Hysteresis Logic - INCREASED thresholds for more stability
-        # Only switch if the new emotion is significantly dominant or persistent
+        # MAXIMUM HYSTERESIS - Very high thresholds for rock-solid stability
+        # Only switch if the new emotion is VERY dominant and persistent
         if voted_emotion != current_stable:
             # Different thresholds for different transitions
             if current_stable in ['neutral', 'happy']:
-                threshold = 0.35  # INCREASED from 0.28 for more stability
+                threshold = 0.50  # VERY HIGH - requires strong, persistent signal
             elif voted_emotion in ['anger', 'fear', 'sad', 'surprise'] and current_stable in ['anger', 'fear', 'sad', 'surprise']:
                 # Intra-cluster switch (e.g., Sad to Anger)
-                threshold = 0.45  # INCREASED from 0.40 for more stability
+                threshold = 0.55  # VERY HIGH - prevent flickering within cluster
             else:
-                threshold = 0.38  # INCREASED from 0.32 for more stability
+                threshold = 0.50  # VERY HIGH - general baseline
                 
             if dominance > threshold:
                 # Require more than a single frame's worth of dominance
