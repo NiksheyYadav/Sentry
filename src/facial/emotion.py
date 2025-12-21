@@ -320,29 +320,38 @@ class EmotionClassifier(nn.Module):
             if happy_prob < 0.5: # Unless it's a very big happy surprise
                 refined['happy'] *= 0.5
                 
-        # 2b. Happy vs Negative Emotions
+        # 2b. Happy vs Negative Emotions - FIXED LOGIC
         negative_emotions = ['anger', 'fear', 'sad']
-        neg_prob = sum(refined.get(e, 0) for e in negative_emotions)
+        max_neg = max(refined.get(e, 0) for e in negative_emotions)
         
-        if happy_prob > 0.4:
-            # Aggressively suppress negative emotions if happy is strong
-            suppression = 0.1 if happy_prob > 0.6 else 0.3
+        # Protect Happy if it's clearly the strongest emotion
+        if happy_prob > 0.35 and happy_prob > max_neg:
+            # Happy is genuinely winning - suppress negative emotions
+            suppression = 0.1 if happy_prob > 0.6 else 0.2
             for emo in negative_emotions:
                 if emo in refined:
                     refined[emo] *= suppression
-        elif neg_prob > 0.5:
-            # Suppress happy if negative emotions are collectively strong
-            refined['happy'] = refined.get('happy', 0) * 0.1
-            # Also aggressively suppress neutral if negative is winning
-            refined['neutral'] *= 0.2
+        elif happy_prob > 0.4:
+            # Happy is strong but not dominant - still suppress negatives moderately
+            for emo in negative_emotions:
+                if emo in refined:
+                    refined[emo] *= 0.3
+        elif max_neg > happy_prob and max_neg > 0.3:
+            # A SINGLE negative emotion is genuinely stronger than Happy
+            # Only then suppress Happy
+            refined['happy'] = refined.get('happy', 0) * 0.2
+            refined['neutral'] *= 0.3
             
         # 3. Specific Confusion: Anger vs Fear vs Sad
         # These are often confused; we use a "Winner-Takes-All" strategy
         # to prevent flickering within the negative cluster.
+        # BUT: Don't apply this if Happy is clearly present (prevents Happy→Sad misclassification)
         cluster_emotions = ['anger', 'fear', 'sad']
         cluster_probs = {e: refined.get(e, 0) for e in cluster_emotions}
+        happy_prob_current = refined.get('happy', 0)
         
-        if sum(cluster_probs.values()) > 0.4:
+        # Only apply Winner-Takes-All if Happy is NOT dominant
+        if sum(cluster_probs.values()) > 0.4 and happy_prob_current < 0.3:
             winner = max(cluster_probs, key=cluster_probs.get)
             win_val = cluster_probs[winner]
             
