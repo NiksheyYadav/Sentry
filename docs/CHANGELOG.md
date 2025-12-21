@@ -1,3 +1,8 @@
+---
+layout: default
+title: Changelog
+---
+
 # Recent Changes & Updates
 
 Changelog for the Sentry Mental Health Assessment Framework.
