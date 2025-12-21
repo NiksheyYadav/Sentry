@@ -113,7 +113,9 @@ class PoseEstimator:
             )
         
         # Create base options with GPU delegate if enabled
-        base_options = python.BaseOptions(model_asset_path=str(self._model_path))
+        # Use as_posix() for cross-platform path compatibility with MediaPipe
+        model_path_str = str(self._model_path.resolve().as_posix())
+        base_options = python.BaseOptions(model_asset_path=model_path_str)
         
         # Try to enable GPU delegate for better performance
         if self.config.enable_gpu_delegate:
