@@ -15,6 +15,7 @@ from src.facial.detector import FaceDetector
 from src.facial.emotion import create_emotion_classifier
 from src.facial.action_units import create_au_detector
 from src.facial.temporal import FacialTemporalAggregator
+from src.facial.postprocessor import EmotionPostProcessor
 from src.posture.pose_estimator import PoseEstimator
 from src.posture.features import PostureFeatureExtractor
 from src.posture.temporal_model import create_temporal_model
@@ -63,6 +64,7 @@ class MentalHealthPipeline:
             self.emotion_classifier = create_emotion_classifier(self.config.facial, device)
         self.au_detector = create_au_detector(self.config.facial, device)
         self.facial_temporal = FacialTemporalAggregator(self.config.facial)
+        self.emotion_postprocessor = EmotionPostProcessor()  # Post-processing for real-world corrections
         
         # Posture analysis
         print("  - Posture analysis modules...")
@@ -200,44 +202,46 @@ class MentalHealthPipeline:
             return result
         
         # Facial analysis
-        # Facial analysis
         facial_embedding = None
         if face is not None:
             emotion = self.emotion_classifier.predict(face.face_image)
             au_result = self.au_detector.predict(face.face_image)
             
-            # Update temporal
+            # Post-process emotion using smile detection and temporal smoothing
+            postprocessed = self.emotion_postprocessor.process(
+                raw_emotion=emotion.emotion,
+                raw_confidence=emotion.confidence,
+                raw_probabilities=emotion.probabilities,
+                face_image=face.face_image
+            )
+            
+            # Update temporal aggregator with post-processed probabilities
             self.facial_temporal.update(
-                emotion_probs=emotion.probabilities,
+                emotion_probs=postprocessed.final_probabilities,
                 au_intensities=au_result.au_intensities,
                 embedding=emotion.embedding,
                 timestamp=timestamp
             )
             
-            # Get stabilized emotion
-            stable_emotion = self.facial_temporal.get_stable_emotion()
+            # Use post-processed emotion as the stable emotion
+            stable_emotion = postprocessed.final_emotion
             
             facial_embedding = emotion.embedding
             self._last_emotion = stable_emotion
-            
-            # Sync probabilities with stable label to prevent UI mismatch
-            # If stable emotion changed, ensure it's the winner in probabilities
-            updated_probs = emotion.probabilities.copy()
-            if stable_emotion in updated_probs and updated_probs[stable_emotion] < 0.5:
-                # Boost the stable emotion and suppress others
-                updated_probs[stable_emotion] = 0.8
-                others_sum = sum(v for k, v in updated_probs.items() if k != stable_emotion)
-                if others_sum > 0:
-                    scale = 0.2 / others_sum
-                    for k in updated_probs:
-                        if k != stable_emotion:
-                            updated_probs[k] *= scale
-            
-            self._last_emotion_probs = updated_probs
+            self._last_emotion = stable_emotion
+            self._last_emotion_probs = postprocessed.final_probabilities
             result['info']['emotion'] = stable_emotion
-            result['emotion_result'] = emotion
-            result['emotion_result'].emotion = stable_emotion
-            result['emotion_result'].probabilities = updated_probs
+            result['info']['raw_emotion'] = emotion.emotion  # Keep raw for debugging
+            if postprocessed.correction_applied:
+                result['info']['correction'] = postprocessed.correction_reason
+            
+            # Update the emotion result with post-processed data
+            result['emotion_result'] = type(emotion)(
+                emotion=stable_emotion,
+                confidence=postprocessed.final_confidence,
+                probabilities=postprocessed.final_probabilities,
+                embedding=emotion.embedding
+            )
         
         # Posture analysis
         posture_embedding = None
@@ -300,6 +304,7 @@ class MentalHealthPipeline:
     def _reset_temporal(self) -> None:
         """Reset all temporal state."""
         self.facial_temporal.reset()
+        self.emotion_postprocessor.reset()  # Reset post-processor state
         self.posture_features.reset()
         self._posture_feature_buffer.clear()
         self.fusion_network.reset_temporal_state()
@@ -322,11 +327,11 @@ def run_demo(config: Config, emotion_model: Optional['EmotionClassifier'] = None
         pipeline.run()
 
 
-def run_benchmark(config: Config, duration: int = 60) -> None:
+def run_benchmark(config: Config, duration: int = 60, emotion_model: Optional['EmotionClassifier'] = None) -> None:
     """Run performance benchmark."""
     print(f"Running {duration}s performance benchmark...")
     
-    pipeline = MentalHealthPipeline(config)
+    pipeline = MentalHealthPipeline(config, emotion_classifier=emotion_model)
     
     if not pipeline.start():
         return
@@ -422,7 +427,7 @@ def main():
     
     # Run requested mode
     if args.benchmark:
-        run_benchmark(config, args.duration)
+        run_benchmark(config, args.duration, emotion_model=trained_emotion_model)
     else:
         run_demo(config, emotion_model=trained_emotion_model)
 

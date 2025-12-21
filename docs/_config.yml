@@ -1,0 +1,10 @@
+theme: jekyll-theme-slate
+title: Sentry AI
+description: Advanced Multimodal Mental Health Monitoring Framework
+show_downloads: true
+logo: assets/hero_image.png
+google_analytics: 
+#baseurl: "/Sentry" # Optimized for User Page functionality
+url: "https://niksheyyadav.github.io/Sentry"
+markdown: kramdown
+highlighter: rouge

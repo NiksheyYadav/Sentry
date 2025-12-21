@@ -8,10 +8,84 @@ from torchvision import transforms
 # from torchvision.models import mobilenet_v3_large, MobileNet_V3_Large_Weights
 from torchvision.models import densenet121, DenseNet121_Weights
 import numpy as np
+import cv2
+from PIL import Image
 from typing import Optional, Tuple, Dict, List
 from dataclasses import dataclass
 
 from ..config import FacialConfig
+
+
+class LightingNormalization:
+    """
+    Custom transform for lighting normalization using CLAHE and gamma correction.
+    
+    This improves emotion recognition accuracy in low-light conditions by:
+    1. Detecting if image is dark based on mean brightness
+    2. Applying gamma correction to boost dark images
+    3. Using CLAHE (Contrast Limited Adaptive Histogram Equalization) for local contrast
+    """
+    
+    def __init__(self, clip_limit: float = 3.0, tile_grid_size: Tuple[int, int] = (8, 8)):
+        """
+        Initialize lighting normalization.
+        
+        Args:
+            clip_limit: CLAHE clip limit for contrast limiting (higher = more contrast)
+            tile_grid_size: Size of grid for adaptive histogram equalization
+        """
+        self.clip_limit = clip_limit
+        self.tile_grid_size = tile_grid_size
+    
+    def __call__(self, img):
+        """
+        Apply lighting normalization to an image.
+        
+        Args:
+            img: PIL Image or numpy array (RGB or BGR)
+            
+        Returns:
+            PIL Image with normalized lighting (grayscale)
+        """
+        # Convert PIL to numpy if needed
+        if isinstance(img, Image.Image):
+            img_np = np.array(img)
+        else:
+            img_np = img
+        
+        # Ensure we have a color image for processing
+        if len(img_np.shape) == 2:
+            # Already grayscale
+            gray = img_np
+        elif img_np.shape[2] == 4:
+            # RGBA -> RGB -> Grayscale
+            gray = cv2.cvtColor(img_np[:, :, :3], cv2.COLOR_RGB2GRAY)
+        else:
+            # RGB -> Grayscale
+            gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+        
+        # Check mean brightness to detect dark images
+        mean_brightness = np.mean(gray)
+        
+        # Apply gamma correction for dark images (brightness < 100 on 0-255 scale)
+        if mean_brightness < 100:
+            # Calculate adaptive gamma based on brightness
+            # Darker images get higher gamma (more brightening)
+            gamma = 1.0 + (100 - mean_brightness) / 100  # Range: 1.0 to 2.0
+            gamma = min(gamma, 1.8)  # Cap at 1.8 to avoid over-brightening
+            
+            # Apply gamma correction
+            inv_gamma = 1.0 / gamma
+            table = np.array([((i / 255.0) ** inv_gamma) * 255 
+                             for i in np.arange(0, 256)]).astype("uint8")
+            gray = cv2.LUT(gray, table)
+        
+        # Apply CLAHE for local contrast enhancement
+        clahe = cv2.createCLAHE(clipLimit=self.clip_limit, tileGridSize=self.tile_grid_size)
+        enhanced = clahe.apply(gray)
+        
+        # Convert back to PIL Image
+        return Image.fromarray(enhanced)
 
 
 @dataclass
@@ -97,10 +171,11 @@ class EmotionClassifier(nn.Module):
             nn.Linear(512, self.num_classes)
         )
         
-        # Preprocessing (Grayscale)
+        # Preprocessing with lighting normalization for low-light robustness
+        # LightingNormalization applies CLAHE + gamma correction -> outputs grayscale PIL Image
         self.preprocess = transforms.Compose([
             transforms.ToPILImage(),
-            transforms.Grayscale(num_output_channels=1),
+            LightingNormalization(clip_limit=3.0, tile_grid_size=(8, 8)),  # Adaptive lighting
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
             transforms.Normalize(
@@ -157,7 +232,7 @@ class EmotionClassifier(nn.Module):
         use_amp = (self._device == "cuda" or (isinstance(self._device, torch.device) and self._device.type == "cuda"))
         
         with torch.no_grad():
-            with torch.cuda.amp.autocast(enabled=use_amp):
+            with torch.amp.autocast('cuda', enabled=use_amp):
                 logits, embedding = self.forward(input_tensor)
                 probs = F.softmax(logits, dim=1)
         

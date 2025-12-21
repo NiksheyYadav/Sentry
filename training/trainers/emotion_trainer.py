@@ -377,8 +377,8 @@ def train_emotion_model(
                 train_loader.dataset.aggressive_transform = get_aggressive_transforms()
                 
         num_classes = 6
-    else:
-        # FER2013 - now uses 6 classes (disgust excluded)
+    elif dataset == 'fer2013':
+        # FER2013 - 6 classes (disgust excluded)
         train_loader, val_loader = create_fer2013_loaders(
             data_dir, 
             batch_size=batch_size,
@@ -390,8 +390,18 @@ def train_emotion_model(
         )
         if hasattr(train_loader.dataset, 'aggressive_transform'):
              train_loader.dataset.aggressive_transform = get_aggressive_transforms()
-             
-        num_classes = 6  # Fixed from 7 to match project standard (excluding disgust)
+        num_classes = 6
+    else:
+        # CK+ dataset - 6 classes, default 400 samples per class
+        from ..datasets.ckplus import create_ck_loaders
+        train_loader, val_loader = create_ck_loaders(
+            data_dir, 
+            batch_size=batch_size,
+            num_workers=num_workers,
+            balance_classes=balance_classes,
+            target_samples_per_class=target_samples_per_class if target_samples_per_class else 400
+        )
+        num_classes = 6
     
     # Create model
     from src.facial.emotion import EmotionClassifier

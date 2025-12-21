@@ -87,6 +87,29 @@ kaggle datasets download -d mstjebashazida/affectnet
 - Folder structure: `train/0/`, `train/1/`, etc.
 - CSV format: `labels.csv` with columns `image,label` or `subDirectory,image,expression`
 
+#### CK+ (Cohn-Kanade Extended - Small but Clean)
+
+```bash
+# Download from Kaggle
+kaggle datasets download zhiguocui/ck-dataset
+
+# Extract
+unzip ck-dataset.zip -d data/ck/
+```
+
+**Structure:**
+```
+data/ck/
+├── angry/
+├── fear/
+├── happy/
+├── neutral/
+├── sad/
+└── surprise/
+```
+
+> **Note**: CK+ is a small (~1000 images) but high-quality posed dataset. Balanced training uses 400 samples per class (via augmentation).
+
 ---
 
 ### Training Commands
@@ -298,6 +321,17 @@ python train.py emotion --data data/fer2013 --balance --aggressive --epochs 30
 ### Channel Mismatch Error
 
 The model expects 1-channel grayscale input. Make sure your dataset loader outputs grayscale images with `mean=[0.5], std=[0.5]` normalization.
+
+### Low-Light / Webcam Accuracy Issues
+
+If your trained model performs poorly in low-light conditions (common with webcams), the preprocessing now includes automatic lighting normalization:
+
+- **CLAHE** (Contrast Limited Adaptive Histogram Equalization) enhances local contrast
+- **Adaptive gamma correction** brightens dark images automatically
+
+This is applied by default in `EmotionClassifier.preprocess`. If you still experience issues, try:
+1. Improving your lighting conditions
+2. Adjusting `clip_limit` parameter in `LightingNormalization` (higher = more contrast)
 
 ### "No samples found"
 

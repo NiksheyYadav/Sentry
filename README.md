@@ -104,6 +104,13 @@ python main.py --video path/to/video.mp4
 python train.py emotion --data data/fer2013 --epochs 40 --balance --aggressive
 ```
 
+### Emotion Model (CK+ - Small but Clean)
+
+```bash
+# Balanced training - 400 samples per class
+python train.py emotion --data data/ck --epochs 40 --balance --aggressive
+```
+
 ### Emotion Model (AffectNet)
 
 ```bash
@@ -123,7 +130,7 @@ python train.py posture --data data/posture --epochs 50
 | `--data` | Path to dataset (required) |
 | `--epochs` | Number of training epochs (default: 20) |
 | `--batch-size` | Batch size (default: 64) |
-| `--balance` | Balance classes to 5000 samples each |
+| `--balance` | Balance classes (CK=400, FER2013=5000 samples each) |
 | `--aggressive` | Extra strong augmentation (use with --balance) |
 | `--target-samples` | Custom samples per class when balancing |
 | `--cpu` | Force CPU training |
@@ -236,6 +243,7 @@ sentry/
 | Dataset | Classes | Size | Download |
 |---------|---------|------|----------|
 | **FER2013** | 6 (disgust excluded) | ~28K train | `kaggle datasets download -d msambare/fer2013` |
+| **CK+** | 6 (small, clean) | ~1K train | `kaggle datasets download zhiguocui/ck-dataset` |
 | **AffectNet** | 6 | ~290K train | `kaggle datasets download -d mstjebashazida/affectnet` |
 
 ### Posture Analysis

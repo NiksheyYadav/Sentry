@@ -309,7 +309,6 @@ def evaluate_trained_model(
     
     from src.facial.emotion import EmotionClassifier
     from src.config import FacialConfig
-    from training.datasets.affectnet import create_affectnet_loaders
     
     # Create output directory
     output_path = Path(output_dir)
@@ -325,12 +324,35 @@ def evaluate_trained_model(
     checkpoint = torch.load(model_path, map_location=device, weights_only=False)
     model.load_state_dict(checkpoint['model_state_dict'])
     
-    # Load data
-    _, val_loader = create_affectnet_loaders(data_dir, batch_size=64, num_classes=6)
+    # Auto-detect dataset type from data_dir
+    data_lower = data_dir.lower()
+    if 'ck' in data_lower:
+        dataset_type = 'ck'
+        from training.datasets.ckplus import create_ck_loaders
+        print(f"Detected CK+ dataset")
+        _, val_loader = create_ck_loaders(data_dir, batch_size=64, balance_classes=False)
+        num_classes = 6  # CK+ uses 6 emotions (excludes contempt and disgust)
+        # CK+ labels: angry, fear, happy, sad, surprise, neutral
+        evaluator_labels = ['angry', 'fear', 'happy', 'sad', 'surprise', 'neutral']
+    elif 'fer' in data_lower:
+        dataset_type = 'fer2013'
+        from training.datasets.fer2013 import create_fer2013_loaders
+        print(f"Detected FER2013 dataset")
+        _, val_loader = create_fer2013_loaders(data_dir, batch_size=64)
+        num_classes = 7
+        evaluator_labels = ['angry', 'disgust', 'fear', 'happy', 'sad', 'surprise', 'neutral']
+    else:
+        dataset_type = 'affectnet'
+        from training.datasets.affectnet import create_affectnet_loaders
+        print(f"Detected AffectNet dataset")
+        _, val_loader = create_affectnet_loaders(data_dir, batch_size=64, num_classes=6)
+        num_classes = 6
+        evaluator_labels = ['neutral', 'happy', 'sad', 'surprise', 'fear', 'anger']
     
     # Evaluate
     evaluator = ModelEvaluator(model, device)
-    metrics = evaluator.evaluate(val_loader, num_classes=6)
+    evaluator.EMOTION_LABELS = evaluator_labels  # Set dataset-specific labels
+    metrics = evaluator.evaluate(val_loader, num_classes=num_classes)
     
     # Print summary
     evaluator.print_summary(metrics)

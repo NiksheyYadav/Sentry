@@ -22,3 +22,4 @@ logs/
 # System
 thumbs.db
 Desktop.ini
+"*.zip" 

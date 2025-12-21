@@ -1,56 +1,56 @@
-# 📚 Sentry Documentation
+---
+layout: default
+title: Home
+---
 
-Welcome to the Sentry documentation. Start here to learn how to use the framework.
+# 🩺 Sentry AI: Mental Health Monitoring Framework
+
+![Sentry Hero Interface](assets/hero_image.png)
+
+> **Real-time multimodal emotion, posture, and stress analysis powered by advanced AI.**
 
 ---
 
-## Quick Links
+## 🚀 Welcome to Sentry
 
-| I want to... | Go to... |
-|--------------|----------|
-| **Get started quickly** | [Getting Started](GETTING_STARTED.md) |
-| **Train models** | [Training Guide](TRAINING.md) |
-| **See all commands** | [Command Reference](COMMANDS.md) |
-| **Understand the AI** | [Theory & Research](THEORY.md) |
-| **Learn the architecture** | [System Architecture](ARCHITECTURE.md) |
-| **Optimize performance** | [Performance Guide](PERFORMANCE.md) |
+Sentry is a state-of-the-art framework that uses computer vision and deep learning to assess mental well-being in real-time. By analyzing facial micro-expressions and body posture, it provides objective metrics for stress, anxiety, and emotional states.
 
----
+### 🌟 Key Features
 
-## Documentation Overview
-
-### [Getting Started](GETTING_STARTED.md)
-Installation, prerequisites, and running your first demo.
-
-### [Training Guide](TRAINING.md)
-Complete guide to training emotion and posture models, including:
-- Dataset download and preparation
-- All training options and flags
-- Balanced training for imbalanced classes
-- Troubleshooting common issues
-
-### [Command Reference](COMMANDS.md)
-Every CLI command with all options in easy-to-read tables.
-
-### [Theory & Research](THEORY.md)
-Deep dive into the research behind Sentry:
-- Multimodal emotion recognition
-- Facial expression analysis (MTCNN, DenseNet)
-- Posture analysis (MediaPipe, TCN-LSTM)
-- Clinical correlations with mental health
-
-### [System Architecture](ARCHITECTURE.md)
-Technical details of the system design:
-- Pipeline overview
-- Model architectures
-- Fusion mechanism
-- Prediction heads
-
-### [Performance Guide](PERFORMANCE.md)
-Optimization tips for different hardware configurations.
+*   **Hybrid Emotion AI**: Combines Deep Learning (DenseNet) with Geometric Analysis (FaceMesh) for superior accuracy.
+*   **Real-time Monitoring**: Processes video at 30+ FPS on standard hardware.
+*   **Multimodal Fusion**: Integrates face and posture data for holistic assessment.
+*   **Privacy First**: All processing happens locally; no video is ever sent to the cloud.
 
 ---
 
-## Version History
+## 📚 Documentation & Guides
 
-See [Changelog](recent_changes_updates_byversion.md) for version history and recent updates.
+| Guide | Description |
+|-------|-------------|
+| [**🤖 Understand the AI**](AI_EXPLAINED.md) | **Start Here!** A fun, easy guide to how Sentry actually works inside. |
+| [**🚀 Getting Started**](GETTING_STARTED.md) | Installation, setup, and running your first demo. |
+| [**🏋️ Training Guide**](TRAINING.md) | How to train your own models on custom datasets. |
+| [**🏗️ Architecture**](ARCHITECTURE.md) | Deep dive into the system's technical design and codebase. |
+| [**💻 Commands**](COMMANDS.md) | Full reference for all CLI commands and options. |
+| [**⚡ Performance**](PERFORMANCE.md) | Tips for optimizing speed and reducing latency. |
+| [**📝 Changelog**](CHANGELOG.md) | History of updates, bug fixes, and new features. |
+
+---
+
+## 🛠️ Quick Start
+
+```bash
+# Clone the repo
+git clone https://github.com/NiksheyYadav/Sentry.git
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the demo
+python main.py --demo
+```
+
+---
+
+<center>Made with ❤️ by the Sentry Team</center>
