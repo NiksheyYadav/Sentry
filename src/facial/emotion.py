@@ -339,26 +339,39 @@ class EmotionClassifier(nn.Module):
             # Give the shift to the strongest negative emotion
             winner_neg = max(neg_emotions_raw, key=lambda e: refined.get(e, 0))
             refined[winner_neg] += shift
+        
+        # 1d. NEUTRAL BOOST: If no strong emotions present, boost Neutral to prevent flickering
+        all_emotions = ['happy', 'sad', 'anger', 'fear', 'surprise']
+        max_emotion = max(refined.get(e, 0) for e in all_emotions)
+        if max_emotion < 0.4:  # No strong emotion
+            # User is likely neutral - boost it aggressively
+            refined['neutral'] = 0.80
+            # Suppress all other emotions
+            for k in refined:
+                if k != 'neutral':
+                    refined[k] *= 0.1
             
         # 2. Mutual Exclusion: Happy vs Surprise vs Negative
         happy_prob = refined.get('happy', 0)
         surprise_prob = refined.get('surprise', 0)
         
-        # 2a. Happy vs Surprise Disentanglement - IMPROVED
-        # Surprise has open mouth + raised eyebrows, Happy has smile
-        # If Surprise is present (even weakly), check if it should win over Happy
-        if surprise_prob > 0.02 and happy_prob > 0.5:
-            # Both are present - Surprise is being suppressed by Happy
-            # If Surprise is even slightly present, it's likely a surprised expression
-            # (open mouth) not a smile
+        # 2a. Happy vs Surprise Disentanglement - REFINED
+        # Only override if Surprise is VERY weak (< 0.05) and Happy is strong
+        # This prevents false Surprise detection
+        if surprise_prob > 0.01 and surprise_prob < 0.05 and happy_prob > 0.6:
+            # Surprise is very weak, Happy is strong - likely a smile, not surprise
+            refined['surprise'] = 0.02
+            refined['happy'] = 0.85
+        elif surprise_prob > 0.05 and happy_prob > 0.5:
+            # Surprise is stronger - likely genuine surprise (open mouth)
             refined['surprise'] = 0.80
             refined['happy'] = 0.10
         elif happy_prob > 0.35 and surprise_prob > 0.1:
-            # If smiling, it's probably not "Surprise" (which usually has eyebrows up)
+            # If smiling, it's probably not "Surprise"
             refined['surprise'] *= 0.4
         elif surprise_prob > 0.35 and happy_prob > 0.1:
             # If surprised, it's rarely "Happy" at the same time
-            if happy_prob < 0.5: # Unless it's a very big happy surprise
+            if happy_prob < 0.5:
                 refined['happy'] *= 0.5
                 
         # 2b. Happy vs Negative Emotions - FIXED LOGIC

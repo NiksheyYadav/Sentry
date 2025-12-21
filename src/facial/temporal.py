@@ -201,7 +201,8 @@ class FacialTemporalAggregator:
         if voted_emotion != current_stable:
             # Different thresholds for different transitions
             if current_stable in ['neutral', 'happy']:
-                threshold = 0.50  # VERY HIGH - requires strong, persistent signal
+                # LOWERED from 0.50 to help detect Neutral faster
+                threshold = 0.40 if voted_emotion == 'neutral' else 0.50
             elif voted_emotion in ['anger', 'fear', 'sad', 'surprise'] and current_stable in ['anger', 'fear', 'sad', 'surprise']:
                 # Intra-cluster switch (e.g., Sad to Anger)
                 threshold = 0.55  # VERY HIGH - prevent flickering within cluster
