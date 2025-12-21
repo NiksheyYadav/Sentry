@@ -177,8 +177,8 @@ class FacialTemporalAggregator:
         if len(self._emotion_buffer) < 5:
             return self._last_dominant_emotion or 'neutral'
             
-        # Use a larger window for stability (up to 15 frames ≈ 1.5 seconds)
-        window_size = 15
+        # Use a LARGER window for MORE stability (20 frames ≈ 2 seconds)
+        window_size = 20  # INCREASED from 15
         recent = list(self._emotion_buffer)[-window_size:]
         
         # Weighted voting: sum of probabilities across the window
@@ -196,24 +196,20 @@ class FacialTemporalAggregator:
         
         current_stable = self._last_dominant_emotion or 'neutral'
         
-        # Hysteresis Logic:
+        # Hysteresis Logic - INCREASED thresholds for more stability
         # Only switch if the new emotion is significantly dominant or persistent
         if voted_emotion != current_stable:
             # Different thresholds for different transitions
-            # Switching away from Neutral or Happy requires more evidence
-            # Switching away from Neutral or Happy requires less evidence now for speed
             if current_stable in ['neutral', 'happy']:
-                threshold = 0.28  # Drastically lowered for instant reaction
+                threshold = 0.35  # INCREASED from 0.28 for more stability
             elif voted_emotion in ['anger', 'fear', 'sad', 'surprise'] and current_stable in ['anger', 'fear', 'sad', 'surprise']:
                 # Intra-cluster switch (e.g., Sad to Anger)
-                # Keep moderate hysteresis but remove distance penalty
-                threshold = 0.40
+                threshold = 0.45  # INCREASED from 0.40 for more stability
             else:
-                threshold = 0.32  # General baseline
+                threshold = 0.38  # INCREASED from 0.32 for more stability
                 
             if dominance > threshold:
                 # Require more than a single frame's worth of dominance
-                # (15 frames * average score per frame)
                 self._last_dominant_emotion = voted_emotion
                 return voted_emotion
                 

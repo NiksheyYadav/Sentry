@@ -270,6 +270,7 @@ class EmotionClassifier(nn.Module):
         sad_prob = refined.get('sad', 0)
         happy_prob = refined.get('happy', 0)
         anger_prob = refined.get('anger', 0)
+        fear_prob = refined.get('fear', 0)
         
         # If Sad is unrealistically dominant (>0.7) but Happy or Anger are present (even weakly)
         if sad_prob > 0.7:
@@ -284,15 +285,16 @@ class EmotionClassifier(nn.Module):
                     if k not in ['happy', 'sad', 'neutral']:
                         refined[k] *= 0.1
             # Check if Anger should actually win (furrowed brows, tense face)
-            elif anger_prob > 0.02:  # LOWERED from 0.05 - even 2% Anger means user is angry
-                # OVERRIDE: User is angry, not sad
-                refined['anger'] = 0.85  # INCREASED from 0.75 for more stability
-                refined['sad'] = 0.05    # LOWERED from 0.10 to suppress Sad more
-                refined['neutral'] = 0.05
+            # ULTRA-AGGRESSIVE: Even 0.5% Anger means user is angry, not sad
+            elif anger_prob > 0.005 or fear_prob > 0.01:  # Anger OR Fear signal
+                # OVERRIDE: User is angry/tense, not sad
+                refined['anger'] = 0.90  # INCREASED from 0.85 for maximum stability
+                refined['sad'] = 0.02    # LOWERED from 0.05 to almost eliminate Sad
+                refined['neutral'] = 0.03
                 # Suppress other emotions
                 for k in refined:
                     if k not in ['anger', 'sad', 'neutral']:
-                        refined[k] *= 0.1
+                        refined[k] *= 0.05
         
         # Calculate entropy (measure of uncertainty)
         # Higher entropy means the model is confused
