@@ -284,10 +284,10 @@ class EmotionClassifier(nn.Module):
                     if k not in ['happy', 'sad', 'neutral']:
                         refined[k] *= 0.1
             # Check if Anger should actually win (furrowed brows, tense face)
-            elif anger_prob > 0.05:  # Weak Anger signal means user is angry
+            elif anger_prob > 0.02:  # LOWERED from 0.05 - even 2% Anger means user is angry
                 # OVERRIDE: User is angry, not sad
-                refined['anger'] = 0.75
-                refined['sad'] = 0.10
+                refined['anger'] = 0.85  # INCREASED from 0.75 for more stability
+                refined['sad'] = 0.05    # LOWERED from 0.10 to suppress Sad more
                 refined['neutral'] = 0.05
                 # Suppress other emotions
                 for k in refined:
