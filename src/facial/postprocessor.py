@@ -336,11 +336,11 @@ class EmotionPostProcessor:
                     correction_reason = f"FaceMesh: Surprise (eye={avg_eye_open:.2f}, mouth={avg_mouth_open:.2f}, brow={avg_eyebrow:.2f})"
             
             # === FEAR Correction ===
-            # Wide eyes + raised eyebrows but mouth not fully open
-            elif avg_fear > 0.4:
-                if raw_emotion in ['sad', 'neutral', 'surprise']:
-                    smoothed_probs['fear'] = max(smoothed_probs.get('fear', 0), avg_fear)
-                    smoothed_probs[raw_emotion] *= 0.4
+            # Wide eyes + raised eyebrows
+            elif avg_fear > 0.35 and avg_eye_open > 0.5:
+                if raw_emotion in ['sad', 'neutral', 'anger']:
+                    smoothed_probs['fear'] = max(smoothed_probs.get('fear', 0), avg_fear * 0.95)
+                    smoothed_probs[raw_emotion] *= 0.45
                     correction_applied = True
                     correction_reason = f"FaceMesh: Fear (eye={avg_eye_open:.2f}, brow={avg_eyebrow:.2f})"
             
@@ -363,21 +363,22 @@ class EmotionPostProcessor:
                     correction_reason = f"FaceMesh: Neutral (score={avg_neutral:.2f})"
             
             # === SAD Correction ===
-            # FaceMesh detected sadness
-            elif avg_sad > 0.45:
-                if raw_emotion in ['neutral', 'happy']:
-                    smoothed_probs['sad'] = max(smoothed_probs.get('sad', 0), avg_sad)
-                    smoothed_probs[raw_emotion] *= 0.5
+            # FaceMesh detected sadness (frown + low brows)
+            elif avg_sad > 0.3 and avg_smile < 0.45:
+                if raw_emotion in ['neutral', 'happy', 'anger']:
+                    smoothed_probs['sad'] = max(smoothed_probs.get('sad', 0), avg_sad * 0.95)
+                    smoothed_probs[raw_emotion] *= 0.45
                     correction_applied = True
-                    correction_reason = f"FaceMesh: Sad (score={avg_sad:.2f})"
+                    correction_reason = f"FaceMesh: Sad (score={avg_sad:.2f}, smile={avg_smile:.2f})"
             
             # === ANGER Correction ===
-            elif avg_anger > 0.4:
-                if raw_emotion in ['neutral', 'sad']:
-                    smoothed_probs['anger'] = max(smoothed_probs.get('anger', 0), avg_anger)
-                    smoothed_probs[raw_emotion] *= 0.5
+            # Furrowed brows + tense expression
+            elif avg_anger > 0.3 and avg_eyebrow < 0.3:
+                if raw_emotion in ['neutral', 'sad', 'fear']:
+                    smoothed_probs['anger'] = max(smoothed_probs.get('anger', 0), avg_anger * 0.95)
+                    smoothed_probs[raw_emotion] *= 0.45
                     correction_applied = True
-                    correction_reason = f"FaceMesh: Anger (score={avg_anger:.2f})"
+                    correction_reason = f"FaceMesh: Anger (score={avg_anger:.2f}, brow={avg_eyebrow:.2f})"
             
             # Renormalize if correction applied
             if correction_applied:

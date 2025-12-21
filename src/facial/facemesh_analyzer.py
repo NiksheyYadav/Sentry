@@ -179,20 +179,45 @@ class FaceMeshExpressionAnalyzer:
             scores.surprise = min(0.7, 0.2 + scores.eye_openness * 0.3 + scores.mouth_openness * 0.2)
         
         # FEAR: Wide eyes + Raised eyebrows + Tense mouth (not fully open)
-        if scores.eye_openness > 0.55 and scores.eyebrow_raise > 0.4 and 0.2 < scores.mouth_openness < 0.6:
-            scores.fear = min(0.85, 0.3 + scores.eye_openness * 0.3 + scores.eyebrow_raise * 0.3)
+        # Also check for partially open mouth with wide eyes
+        if scores.eye_openness > 0.5 and scores.eyebrow_raise > 0.35:
+            # Fear with tense/slightly open mouth
+            if 0.1 < scores.mouth_openness < 0.6:
+                scores.fear = min(0.85, 0.25 + scores.eye_openness * 0.35 + scores.eyebrow_raise * 0.25)
+            # Fear can also show with more closed mouth but very wide eyes
+            elif scores.eye_openness > 0.65:
+                scores.fear = min(0.7, 0.2 + scores.eye_openness * 0.4)
         
         # HAPPY: Smile
         if scores.smile_score > 0.55:
             scores.happy = min(0.95, 0.3 + (scores.smile_score - 0.5) * 1.5)
         
-        # SAD: Low eyebrows + Frown (low smile score) + Normal/closed eyes
-        if scores.smile_score < 0.4 and scores.eyebrow_raise < 0.3 and scores.eye_openness < 0.5:
-            scores.sad = min(0.85, 0.3 + (0.5 - scores.smile_score) * 0.6 + (0.3 - scores.eyebrow_raise) * 0.3)
+        # SAD: Frown (low smile) + low/normal eyebrows + any eye state
+        # Sadness shows in mouth corners drooping and reduced muscle activity
+        if scores.smile_score < 0.42:  # Not smiling at all
+            sad_score = 0.0
+            # Low smile contributes to sadness
+            sad_score += (0.5 - scores.smile_score) * 0.5
+            # Low eyebrows add to sadness
+            if scores.eyebrow_raise < 0.35:
+                sad_score += (0.35 - scores.eyebrow_raise) * 0.4
+            # Slightly closed/droopy eyes add to sadness
+            if scores.eye_openness < 0.5:
+                sad_score += (0.5 - scores.eye_openness) * 0.3
+            scores.sad = min(0.85, sad_score)
         
-        # ANGER: Low eyebrows + Tense mouth + Normal eyes
-        if scores.eyebrow_raise < 0.2 and scores.smile_score < 0.45 and 0.3 < scores.eye_openness < 0.6:
-            scores.anger = min(0.8, 0.3 + (0.2 - scores.eyebrow_raise) * 1.5)
+        # ANGER: Furrowed brows (low) + tense face + eyes not wide
+        # Key: eyebrows pulled DOWN and together
+        if scores.eyebrow_raise < 0.25 and scores.smile_score < 0.48:
+            anger_score = 0.0
+            # Very low eyebrows is the key indicator
+            anger_score += (0.25 - scores.eyebrow_raise) * 1.0
+            # Not smiling adds to anger
+            anger_score += (0.5 - scores.smile_score) * 0.3
+            # Eyes should be normal/squinted, not wide
+            if 0.25 < scores.eye_openness < 0.55:
+                anger_score += 0.15
+            scores.anger = min(0.8, anger_score)
         
         # NEUTRAL: No strong expression
         max_expression = max(scores.surprise, scores.fear, scores.happy, scores.sad, scores.anger)
