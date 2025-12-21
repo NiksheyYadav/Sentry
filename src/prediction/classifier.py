@@ -263,6 +263,22 @@ class MentalHealthClassifier(nn.Module):
             stress_probs = np.array([0.9, 0.1, 0.0])
             neutral_probs = np.array([0.0, 0.1, 0.9])
             anxiety_probs = np.array([0.9, 0.1, 0.0, 0.0])
+        elif emotion_hint == 'neutral':
+            # Cap anxiety at 'mild' and favor 'normal' neutral
+            stress_probs = np.array([0.8, 0.2, 0.0])
+            # Boost index 1 (normal)
+            neutral_probs = np.array([0.1, 0.8, 0.1])
+            # Anxiety: [minimal, mild, moderate, severe]
+            # Boost minimal/mild, suppress moderate/severe
+            anxiety_probs = np.array([0.7, 0.3, 0.0, 0.0])
+        elif emotion_hint == 'anger':
+            # Force high stress and low neutral
+            # Stress: [low, moderate, high]
+            stress_probs = np.array([0.0, 0.2, 0.8])
+            # Neutral: [low, normal, high]
+            neutral_probs = np.array([0.9, 0.1, 0.0])
+            # Anxiety: [minimal, mild, moderate, severe]
+            anxiety_probs = np.array([0.3, 0.4, 0.3, 0.0])
             
         posture_probs = posture_probs.cpu().numpy()[0]
         stress_ind_probs = stress_ind_probs.cpu().numpy()[0]

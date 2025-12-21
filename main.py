@@ -156,8 +156,12 @@ class MentalHealthPipeline:
                 prediction=result.get('prediction'),
                 alert=result.get('alert'),
                 emotion_result=result.get('emotion_result'),
-                additional_info=result.get('info')
+                additional_info=result.get('info'),
+                snapshot_face=getattr(self, '_current_snapshot', None)
             )
+            
+            # Reset one-time snapshot
+            self._current_snapshot = None
             
             # Handle key press
             key = self.monitor.wait_key(1)
@@ -166,6 +170,17 @@ class MentalHealthPipeline:
             elif key == ord('r'):
                 self._reset_temporal()
                 print("Temporal state reset")
+            elif key == ord('s'):
+                # Take snapshot
+                face = result.get('face')
+                if face:
+                    x1, y1, x2, y2 = face.bbox
+                    # Ensure bbox is within frame
+                    h, w = timestamped.frame.shape[:2]
+                    x1, y1 = max(0, x1), max(0, y1)
+                    x2, y2 = min(w, x2), min(h, y2)
+                    self._current_snapshot = timestamped.frame[y1:y2, x1:x2].copy()
+                    print("Snapshot captured!")
         
         self.stop()
         print("\nAssessment stopped.")
@@ -213,15 +228,14 @@ class MentalHealthPipeline:
             
             facial_embedding = emotion.embedding
             self._last_emotion = stable_emotion
+            self._last_emotion = stable_emotion
             self._last_emotion_probs = postprocessed.final_probabilities
             result['info']['emotion'] = stable_emotion
             result['info']['raw_emotion'] = emotion.emotion  # Keep raw for debugging
             if postprocessed.correction_applied:
                 result['info']['correction'] = postprocessed.correction_reason
             
-            # Create updated emotion result
-            from dataclasses import replace
-            result['emotion_result'] = emotion
+            # Update the emotion result with post-processed data
             result['emotion_result'] = type(emotion)(
                 emotion=stable_emotion,
                 confidence=postprocessed.final_confidence,

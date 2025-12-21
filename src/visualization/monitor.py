@@ -74,6 +74,8 @@ class RealtimeMonitor:
         self.panel_width = 340
         self.card_padding = 12
         self.card_radius = 10
+        self.graph_height = 100
+        self._last_snapshot: Optional[np.ndarray] = None
     
     def start(self) -> None:
         """Initialize display window."""
@@ -165,8 +167,16 @@ class RealtimeMonitor:
                prediction: Optional[MentalHealthPrediction] = None,
                alert: Optional[Alert] = None,
                emotion_result: Optional[EmotionResult] = None,
+<<<<<<< HEAD
+               additional_info: Optional[Dict] = None,
+               snapshot_face: Optional[np.ndarray] = None) -> np.ndarray:
+        """
+        Update display with current frame and analysis results.
+        """
+=======
                additional_info: Optional[Dict] = None) -> np.ndarray:
         """Update display with current frame and analysis results."""
+>>>>>>> b1d8f2c440940a236ff5625e286c7d276a3ec1a5
         # Calculate FPS
         current_time = time.time()
         fps = 1.0 / (current_time - self._last_frame_time + 1e-6)
@@ -184,6 +194,10 @@ class RealtimeMonitor:
         # Draw panel background
         cv2.rectangle(canvas, (w, 0), (w + self.panel_width, h), self.COLORS['bg_panel'], -1)
         
+        # Store snapshot to display in panel
+        if snapshot_face is not None:
+            self._last_snapshot = snapshot_face
+            
         # Draw main frame
         annotated_frame = frame.copy()
         
@@ -378,16 +392,61 @@ class RealtimeMonitor:
                 inner_y += 22
             
             y += card_height + 15
+            
+        # ===== SYSTEM RATINGS CARD =====
+        card_height = 85
+        self._draw_card(canvas, x, y, card_width, card_height, "SYSTEM RATINGS")
+        inner_y = y + 35
         
+        # Posture Rating
+        posture_score = 0.5
+        if additional_info:
+            posture_score = float(additional_info.get('posture', 0.5)) / 30.0 # Curvature
+            
+        posture_rating, p_color = self._get_posture_rating(posture_score)
+        cv2.putText(canvas, f"Posture: {posture_rating}", (x + 12, inner_y),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.45, p_color, 1, cv2.LINE_AA)
+        inner_y += 25
+        
+        # Well-being Score
+        wellbeing_score = 85
+        if prediction:
+            neu_idx = ['low', 'normal', 'high'].index(prediction.neutral_level)
+            wellbeing_score = 40 + (neu_idx * 20)
+            if prediction.stress_level == 'high': wellbeing_score -= 30
+            
+        cv2.putText(canvas, f"Well-being: {wellbeing_score}/100", (x + 12, inner_y),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.45, self.COLORS['accent_green'], 1, cv2.LINE_AA)
+        
+        y += card_height + 15
+        
+        # ===== SNAPSHOT CARD =====
+        if self._last_snapshot is not None:
+            card_height = 160
+            self._draw_card(canvas, x, y, card_width, card_height, "LATEST SNAPSHOT")
+            
+            # Resize snapshot to fit card
+            size = 120
+            try:
+                snapshot_resized = cv2.resize(self._last_snapshot, (size, size))
+                # Center it in card
+                img_x = x + (card_width - size) // 2
+                img_y = y + 30
+                canvas[img_y:img_y+size, img_x:img_x+size] = snapshot_resized
+            except:
+                pass
+                
+            y += card_height + 15
+            
         # ===== ALERT (if any) =====
         if alert is not None:
             alert_color = self.COLORS['accent_red'] if alert.alert_type == 'immediate' else \
                          self.COLORS['accent_orange']
-            self._draw_rounded_rect(canvas, (x, y), (x + card_width, y + 30), alert_color, radius=5)
-            cv2.putText(canvas, f"! ALERT: {alert.alert_type.upper()}", (x + 10, y + 20),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.COLORS['text_primary'], 1, cv2.LINE_AA)
-            y += 45
-        
+            self._draw_rounded_rect(canvas, (x, y), (x + card_width, y + 35), alert_color, radius=5)
+            cv2.putText(canvas, f"! ALERT: {alert.alert_type.upper()}", (x + 10, y + 22),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.55, self.COLORS['text_primary'], 2, cv2.LINE_AA)
+            y += 50
+            
         # ===== FOOTER =====
         footer_y = panel_height - 60
         cv2.line(canvas, (x, footer_y), (x + card_width, footer_y), self.COLORS['divider'], 1)

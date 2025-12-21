@@ -339,6 +339,9 @@ def train_emotion_model(
                 balance_classes=True,
                 target_samples_per_class=target_samples_per_class
             )
+            # Set aggressive transform for weak classes
+            train_dataset.aggressive_transform = get_aggressive_transforms()
+            
             val_dataset = AffectNetDataset(
                 root_dir=data_dir,
                 split='val',
@@ -369,6 +372,10 @@ def train_emotion_model(
                 num_workers=num_workers,
                 num_classes=6
             )
+            # Enable aggressive transforms on the underlying dataset if not balancing
+            if hasattr(train_loader.dataset, 'aggressive_transform'):
+                train_loader.dataset.aggressive_transform = get_aggressive_transforms()
+                
         num_classes = 6
     elif dataset == 'fer2013':
         # FER2013 - 6 classes (disgust excluded)
@@ -381,6 +388,8 @@ def train_emotion_model(
             train_transform=train_transform,
             val_transform=val_transform
         )
+        if hasattr(train_loader.dataset, 'aggressive_transform'):
+             train_loader.dataset.aggressive_transform = get_aggressive_transforms()
         num_classes = 6
     else:
         # CK+ dataset - 6 classes, default 400 samples per class

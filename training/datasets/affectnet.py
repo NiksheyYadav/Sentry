@@ -59,6 +59,10 @@ class AffectNetDataset(Dataset):
         self.balance_classes = balance_classes
         self.target_samples_per_class = target_samples_per_class
         
+        # Weak classes that need more augmentation (sad, surprise, fear, anger)
+        self.weak_classes = {2, 3, 4, 5}  
+        self.aggressive_transform = None # Set by trainer
+        
         # Load and optionally balance samples
         self.samples = self._load_samples()
         
@@ -168,14 +172,24 @@ class AffectNetDataset(Dataset):
                         img_path = self.root_dir / 'images' / img_name
                         if not img_path.exists():
                             img_path = self.root_dir / img_name
-                        orig_label = int(row['label'])
+                        
+                        raw_label = row['label']
+                        if isinstance(raw_label, str):
+                            orig_label = EMOTION_NAME_TO_LABEL.get(raw_label.lower(), -1)
+                        else:
+                            orig_label = int(raw_label)
                     
                     # Format 3: pth,label columns
                     elif 'pth' in columns:
                         img_path = Path(row['pth'])
                         if not img_path.is_absolute():
                             img_path = self.root_dir / img_path
-                        orig_label = int(row.get('label', row.get('expression', -1)))
+                        
+                        raw_label = row.get('label', row.get('expression', -1))
+                        if isinstance(raw_label, str):
+                            orig_label = EMOTION_NAME_TO_LABEL.get(raw_label.lower(), -1)
+                        else:
+                            orig_label = int(raw_label)
                     
                     else:
                         continue
@@ -269,7 +283,12 @@ class AffectNetDataset(Dataset):
             image = Image.new('RGB', (224, 224), color='gray')
         
         if self.transform:
-            image = self.transform(image)
+            # If it's a weak class, use aggressive transform if available
+            current_transform = self.transform
+            if label in self.weak_classes and self.aggressive_transform:
+                current_transform = self.aggressive_transform
+            
+            image = current_transform(image)
         
         return image, label
     

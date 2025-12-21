@@ -78,6 +78,11 @@ class FER2013Dataset(Dataset):
         self.exclude_disgust = exclude_disgust
         self.num_classes = 6 if exclude_disgust else 7
         
+        # Weak classes that need more augmentation (sad, surprise, fear, anger)
+        # 0:angry, 1:fear, 3:sad, 4:surprise
+        self.weak_classes = {0, 1, 3, 4}
+        self.aggressive_transform = None # Set by trainer
+        
         # Load samples
         self.samples = self._load_samples()
         
@@ -220,7 +225,12 @@ class FER2013Dataset(Dataset):
         
         # Apply transforms
         if self.transform:
-            image = self.transform(image)
+            # If it's a weak class, use aggressive transform if available
+            current_transform = self.transform
+            if label in self.weak_classes and self.aggressive_transform:
+                current_transform = self.aggressive_transform
+                
+            image = current_transform(image)
         
         return image, label
     
