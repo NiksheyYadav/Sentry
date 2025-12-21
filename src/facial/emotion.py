@@ -396,6 +396,30 @@ class EmotionClassifier(nn.Module):
             refined['happy'] = refined.get('happy', 0) * 0.2
             refined['neutral'] *= 0.3
             
+        # 2c. Fear vs Sad Disambiguation
+        # Fear has wide eyes + raised eyebrows, Sad has droopy eyes + frown
+        # If both are present, check which should win
+        fear_prob = refined.get('fear', 0)
+        sad_prob_current = refined.get('sad', 0)
+        
+        if fear_prob > 0.5 and sad_prob_current > 0.15:
+            # Both Fear and Sad are present - likely Sad being misclassified as Fear
+            # If Sad is even moderately present, it's probably the correct emotion
+            if sad_prob_current > fear_prob * 0.3:  # Sad is at least 30% of Fear
+                # Override to Sad
+                refined['sad'] = 0.85
+                refined['fear'] = 0.05
+                refined['neutral'] = 0.05
+            else:
+                # Fear is genuinely dominant
+                refined['fear'] = 0.85
+                refined['sad'] = 0.05
+        elif sad_prob_current > 0.5 and fear_prob > 0.15:
+            # Sad is dominant but Fear is present
+            # Keep Sad, suppress Fear
+            refined['sad'] = 0.85
+            refined['fear'] = 0.05
+            
         # 3. Specific Confusion: Anger vs Fear vs Sad
         # These are often confused; we use a "Winner-Takes-All" strategy
         # to prevent flickering within the negative cluster.
