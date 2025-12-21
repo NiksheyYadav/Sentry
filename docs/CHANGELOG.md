@@ -4,6 +4,25 @@ Changelog for the Sentry Mental Health Assessment Framework.
 
 ---
 
+## v0.3.3 (2025-12-21)
+
+### New Features
+- **Monitor UI Redesign** (`src/visualization/monitor.py`)
+  - Modern dark color palette with cyan/green/orange accents
+  - Rounded corners on face bounding boxes and UI elements
+  - Gradient-filled progress bars for metrics
+  - Card-based layout for Assessment and Emotion sections
+  - Tech-style corner accents on face detection box
+  - Glow effects on pose landmarks
+  - Wider sidebar (300px → 340px) for better readability
+
+### New Helper Functions
+- `_draw_rounded_rect()` - Rounded rectangles with fill or outline
+- `_draw_gradient_bar()` - Horizontal gradient progress bars
+- `_draw_card()` - Semi-transparent card containers
+
+---
+
 ## v0.3.2 (2025-12-21)
 
 ### Bugfixes
