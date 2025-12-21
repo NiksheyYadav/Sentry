@@ -343,8 +343,16 @@ class EmotionClassifier(nn.Module):
         happy_prob = refined.get('happy', 0)
         surprise_prob = refined.get('surprise', 0)
         
-        # 2a. Happy vs Surprise Disentanglement
-        if happy_prob > 0.35 and surprise_prob > 0.1:
+        # 2a. Happy vs Surprise Disentanglement - IMPROVED
+        # Surprise has open mouth + raised eyebrows, Happy has smile
+        # If Surprise is present (even weakly), check if it should win over Happy
+        if surprise_prob > 0.02 and happy_prob > 0.5:
+            # Both are present - Surprise is being suppressed by Happy
+            # If Surprise is even slightly present, it's likely a surprised expression
+            # (open mouth) not a smile
+            refined['surprise'] = 0.80
+            refined['happy'] = 0.10
+        elif happy_prob > 0.35 and surprise_prob > 0.1:
             # If smiling, it's probably not "Surprise" (which usually has eyebrows up)
             refined['surprise'] *= 0.4
         elif surprise_prob > 0.35 and happy_prob > 0.1:
