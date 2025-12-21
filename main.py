@@ -64,7 +64,15 @@ class MentalHealthPipeline:
             self.emotion_classifier = create_emotion_classifier(self.config.facial, device)
         self.au_detector = create_au_detector(self.config.facial, device)
         self.facial_temporal = FacialTemporalAggregator(self.config.facial)
-        self.emotion_postprocessor = EmotionPostProcessor()  # Post-processing for real-world corrections
+        # Post-processing for real-world corrections (optional if mediapipe unavailable)
+        try:
+            self.emotion_postprocessor = EmotionPostProcessor()
+            self._use_postprocessor = True
+            print("  - Emotion post-processor enabled (FaceMesh)")
+        except Exception as e:
+            print(f"  - Emotion post-processor disabled (mediapipe issue: {e})")
+            self.emotion_postprocessor = None
+            self._use_postprocessor = False
         
         # Posture analysis
         print("  - Posture analysis modules...")
@@ -207,41 +215,71 @@ class MentalHealthPipeline:
             emotion = self.emotion_classifier.predict(face.face_image)
             au_result = self.au_detector.predict(face.face_image)
             
-            # Post-process emotion using smile detection and temporal smoothing
-            postprocessed = self.emotion_postprocessor.process(
-                raw_emotion=emotion.emotion,
-                raw_confidence=emotion.confidence,
-                raw_probabilities=emotion.probabilities,
-                face_image=face.face_image
-            )
-            
-            # Update temporal aggregator with post-processed probabilities
-            self.facial_temporal.update(
-                emotion_probs=postprocessed.final_probabilities,
-                au_intensities=au_result.au_intensities,
-                embedding=emotion.embedding,
-                timestamp=timestamp
-            )
-            
-            # Use post-processed emotion as the stable emotion
-            stable_emotion = postprocessed.final_emotion
+            # Post-process emotion using smile detection and temporal smoothing (if available)
+            if self._use_postprocessor:
+                postprocessed = self.emotion_postprocessor.process(
+                    raw_emotion=emotion.emotion,
+                    raw_confidence=emotion.confidence,
+                    raw_probabilities=emotion.probabilities,
+                    face_image=face.face_image
+                )
+                
+                # Update temporal aggregator with post-processed probabilities
+                self.facial_temporal.update(
+                    emotion_probs=postprocessed.final_probabilities,
+                    au_intensities=au_result.au_intensities,
+                    embedding=emotion.embedding,
+                    timestamp=timestamp
+                )
+                
+                # Use post-processed emotion as the stable emotion
+                stable_emotion = postprocessed.final_emotion
+            else:
+                # Fallback: use original temporal aggregation
+                self.facial_temporal.update(
+                    emotion_probs=emotion.probabilities,
+                    au_intensities=au_result.au_intensities,
+                    embedding=emotion.embedding,
+                    timestamp=timestamp
+                )
+                stable_emotion = self.facial_temporal.get_stable_emotion()
+                postprocessed = None
             
             facial_embedding = emotion.embedding
             self._last_emotion = stable_emotion
             self._last_emotion = stable_emotion
-            self._last_emotion_probs = postprocessed.final_probabilities
-            result['info']['emotion'] = stable_emotion
-            result['info']['raw_emotion'] = emotion.emotion  # Keep raw for debugging
-            if postprocessed.correction_applied:
-                result['info']['correction'] = postprocessed.correction_reason
             
-            # Update the emotion result with post-processed data
-            result['emotion_result'] = type(emotion)(
-                emotion=stable_emotion,
-                confidence=postprocessed.final_confidence,
-                probabilities=postprocessed.final_probabilities,
-                embedding=emotion.embedding
-            )
+            if self._use_postprocessor and postprocessed:
+                self._last_emotion_probs = postprocessed.final_probabilities
+                result['info']['emotion'] = stable_emotion
+                result['info']['raw_emotion'] = emotion.emotion  # Keep raw for debugging
+                if postprocessed.correction_applied:
+                    result['info']['correction'] = postprocessed.correction_reason
+                
+                # Update the emotion result with post-processed data
+                result['emotion_result'] = type(emotion)(
+                    emotion=stable_emotion,
+                    confidence=postprocessed.final_confidence,
+                    probabilities=postprocessed.final_probabilities,
+                    embedding=emotion.embedding
+                )
+            else:
+                # Fallback: sync probabilities with stable emotion
+                updated_probs = emotion.probabilities.copy()
+                if stable_emotion in updated_probs and updated_probs[stable_emotion] < 0.5:
+                    updated_probs[stable_emotion] = 0.8
+                    others_sum = sum(v for k, v in updated_probs.items() if k != stable_emotion)
+                    if others_sum > 0:
+                        scale = 0.2 / others_sum
+                        for k in updated_probs:
+                            if k != stable_emotion:
+                                updated_probs[k] *= scale
+                
+                self._last_emotion_probs = updated_probs
+                result['info']['emotion'] = stable_emotion
+                result['emotion_result'] = emotion
+                result['emotion_result'].emotion = stable_emotion
+                result['emotion_result'].probabilities = updated_probs
         
         # Posture analysis
         posture_embedding = None
@@ -304,7 +342,8 @@ class MentalHealthPipeline:
     def _reset_temporal(self) -> None:
         """Reset all temporal state."""
         self.facial_temporal.reset()
-        self.emotion_postprocessor.reset()  # Reset post-processor state
+        if self._use_postprocessor:
+            self.emotion_postprocessor.reset()  # Reset post-processor state
         self.posture_features.reset()
         self._posture_feature_buffer.clear()
         self.fusion_network.reset_temporal_state()

@@ -167,16 +167,9 @@ class RealtimeMonitor:
                prediction: Optional[MentalHealthPrediction] = None,
                alert: Optional[Alert] = None,
                emotion_result: Optional[EmotionResult] = None,
-<<<<<<< HEAD
                additional_info: Optional[Dict] = None,
                snapshot_face: Optional[np.ndarray] = None) -> np.ndarray:
-        """
-        Update display with current frame and analysis results.
-        """
-=======
-               additional_info: Optional[Dict] = None) -> np.ndarray:
         """Update display with current frame and analysis results."""
->>>>>>> b1d8f2c440940a236ff5625e286c7d276a3ec1a5
         # Calculate FPS
         current_time = time.time()
         fps = 1.0 / (current_time - self._last_frame_time + 1e-6)
@@ -465,6 +458,17 @@ class RealtimeMonitor:
     def wait_key(self, delay: int = 1) -> int:
         """Wait for key press."""
         return cv2.waitKey(delay)
+    
+    def _get_posture_rating(self, score: float) -> Tuple[str, Tuple[int, int, int]]:
+        """Convert posture score to rating and color."""
+        if score < 0.2:
+            return "Excellent", self.COLORS['accent_green']
+        elif score < 0.4:
+            return "Good", self.COLORS['accent_cyan']
+        elif score < 0.7:
+            return "Fair", self.COLORS['accent_orange']
+        else:
+            return "Poor", self.COLORS['accent_red']
     
     def is_active(self) -> bool:
         """Check if monitor is active."""
