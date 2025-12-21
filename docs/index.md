@@ -1,3 +1,8 @@
+---
+layout: default
+title: Home
+---
+
 # 🩺 Sentry AI: Mental Health Monitoring Framework
 
 ![Sentry Hero Interface](assets/hero_image.png)
