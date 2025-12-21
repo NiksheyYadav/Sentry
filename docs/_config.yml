@@ -4,7 +4,7 @@ description: Advanced Multimodal Mental Health Monitoring Framework
 show_downloads: true
 logo: assets/hero_image.png
 google_analytics: 
-baseurl: "/Sentry" # Important for GitHub Pages
-url: "https://niksheyyadav.github.io"
+#baseurl: "/Sentry" # Important for GitHub Pages
+url: "https://niksheyyadav.github.io/Sentry"
 markdown: kramdown
 highlighter: rouge
